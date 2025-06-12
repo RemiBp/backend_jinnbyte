@@ -3,7 +3,7 @@ name: Deploy to Elastic Beanstalk
 on:
   push:
     branches:
-      - master
+      - main
       - staging
 
 jobs:
@@ -31,7 +31,7 @@ jobs:
       - name: Set deployment variables
         id: vars
         run: |
-          if [ "${{ github.ref }}" == "refs/heads/master" ]; then
+          if [ "${{ github.ref }}" == "refs/heads/main" ]; then
             echo "BUILD_FILE=build.zip" >> $GITHUB_ENV
             echo "EB_APPLICATION_NAME=${{ secrets.EB_APPLICATION_NAME }}" >> $GITHUB_ENV
             echo "EB_ENVIRONMENT_NAME=${{ secrets.EB_ENVIRONMENT_NAME }}" >> $GITHUB_ENV
