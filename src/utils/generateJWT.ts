@@ -8,7 +8,7 @@ interface Payload {
   id: number;
 }
 
-export function generateJWT(payload: Payload, secret: string, expiresIn: string) {
+export function generateJWT(payload: Payload, secret: string, expiresIn: any) {
   const token = jwt.sign(payload, secret, { expiresIn });
   return token;
 }
@@ -20,11 +20,23 @@ export function generateJWTPair(payload: Payload) {
 }
 
 export function verifyRefreshJWT(token: string) {
-  const payload = jwt.verify(token, process.env.JWT_REFRESH_SECRET) as Payload;
+  if (!token) {
+    throw new BadRequestError("Token is missing");
+  }
 
-  if (!payload) throw new BadRequestError("Invalid token");
+  if (!process.env.JWT_REFRESH_SECRET) {
+    throw new Error("JWT_REFRESH_SECRET is not defined in environment variables");
+  }
 
-  return payload;
+  try {
+    if (typeof token !== "string" || token.trim() === "") {
+      throw new BadRequestError("Invalid token format");
+    }
+    const payload = jwt.verify(token, process.env.JWT_REFRESH_SECRET) as Payload;
+    return payload;
+  } catch (error) {
+    throw new BadRequestError("Invalid token: " + error);
+  }
 }
 
 // console.log(generateJWTPair({ id: 1 }));
