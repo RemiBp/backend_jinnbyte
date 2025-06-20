@@ -1,7 +1,7 @@
-import { Request } from "express";
+import { Request } from 'express';
 
-declare module "express" {
+declare module 'express' {
   interface Request {
-    user_id?: number;
+    userId?: number;
   }
 }

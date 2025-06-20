@@ -3,61 +3,112 @@ import {
   PrimaryGeneratedColumn,
   Column,
   OneToMany,
+  ManyToOne,
   CreateDateColumn,
   UpdateDateColumn,
   OneToOne,
   ManyToMany,
   JoinTable,
-  JoinColumn,
-} from "typeorm";
-import { OTP } from "./OTP";
-import { Customer } from "./Customer";
-import { LastActionAt } from "./LastActionAt";
+} from 'typeorm';
+import Roles from './Role';
+import PasswordResetOTP from './PasswordResetOTP';
+import Restaurant from './Restaurant';
+import SignUpOtp from './SignUpOtp';
+import Password from './Password';
+import SocialLogin from './SocialLogin';
+import DeleteReason from './DeleteReason';
+import DeletedUsers from './DeletedUsers';
+import Slot from './Slots';
+import OperationalHour from './OperationalHours';
+import FavouriteRestaurant from './FavouriteRestaurant';
+import PaymentMethods from './PaymentMethods';
+import RestaurantPaymentMethods from './RestaurantPaymentMethods';
 
-@Entity("User")
-export class User {
+@Entity('Users')
+export default class User {
   @PrimaryGeneratedColumn()
   id: number;
 
   @Column({ unique: true })
   email: string;
 
-  @Column({ type: "simple-array", default: "", select: false })
-  refreshTokens: string[];
+  @Column({ nullable: true })
+  deviceId: string;
 
-  @OneToMany(() => OTP, (otp) => otp.user)
-  otpCodes: OTP[];
+  @Column({ nullable: true })
+  firstName: string;
+
+  @Column({ nullable: true })
+  lastName: string;
+
+  @Column({ nullable: true })
+  profilePicture: string;
+
+  @Column({ nullable: true })
+  about: string;
+
+  @Column()
+  phoneNumber: string;
+
+  @Column({ nullable: true })
+  address: string;
 
   @Column({ default: false })
-  onboarding: boolean;
+  isActive: boolean;
 
-  @Column({ nullable: true })
-  fullName: string;
+  @Column({ default: false })
+  isDeleted: boolean;
 
-  @Column({ nullable: true })
-  language: string;
+  @Column({ default: false })
+  isSocialLogin: boolean;
 
-  @Column({ nullable: true })
-  plan: string;
+  @Column({ default: false })
+  isVerified: boolean;
 
-  @Column({ nullable: true })
-  trial: number;
+  @ManyToOne(() => Roles, (role: Roles) => role.users)
+  role: Roles;
 
-  @Column({ type: "jsonb", default: {} })
-  metadata: object;
+  @OneToOne(() => Password, password => password.user, { cascade: true })
+  Password: Password;
 
-  @Column({ type: "timestamptz", nullable: true })
-  email_verified_at: Date;
+  @OneToMany(() => PasswordResetOTP, (passwordResetOTP: PasswordResetOTP) => passwordResetOTP.user, { cascade: true })
+  passwordResetOTPs: PasswordResetOTP[];
 
-  @OneToOne(() => LastActionAt, (lastActionAt) => lastActionAt.user)
-  lastActionAt: Date;
+  @OneToMany(() => SignUpOtp, (signUpOtp: SignUpOtp) => signUpOtp.user, {
+    cascade: true,
+  })
+  signUpOtps: SignUpOtp[];
 
-  @OneToOne(() => Customer, (customer) => customer.user)
-  customer: Customer;
+  @OneToOne(() => DeletedUsers, (deletedUsers: DeletedUsers) => deletedUsers.user, { cascade: true })
+  deletedUsers: DeletedUsers;
 
-  @CreateDateColumn({ type: "timestamptz", default: () => "NOW()", select: false })
-  created_at: Date;
+  @OneToOne(() => Restaurant, (restaurant: Restaurant) => restaurant.user, {
+    cascade: true,
+  })
+  restaurant: Restaurant;
 
-  @UpdateDateColumn({ type: "timestamptz", default: () => "NOW()", onUpdate: "NOW()", select: false })
-  updated_at: Date;
+  @OneToOne(() => SocialLogin, socialLogin => socialLogin.user)
+  socialLogin: SocialLogin;
+
+  @OneToMany(() => OperationalHour, hour => hour.user, { cascade: true })
+  operationalHours: OperationalHour[];
+
+  @OneToMany(() => FavouriteRestaurant, favourite => favourite.user, { cascade: true })
+  addFavourite: FavouriteRestaurant[];
+
+  @OneToMany(() => FavouriteRestaurant, favourite => favourite.restaurant, { cascade: true })
+  favouriteRestaurant: FavouriteRestaurant[];
+
+  @OneToMany (() => RestaurantPaymentMethods, paymentMethods => paymentMethods.user, { cascade: true })
+  paymentMethods: RestaurantPaymentMethods[];
+
+  @CreateDateColumn({ type: 'timestamptz', default: () => 'NOW()' })
+  createdAt: Date;
+
+  @UpdateDateColumn({
+    type: 'timestamptz',
+    default: () => 'NOW()',
+    onUpdate: 'NOW()',
+  })
+  updatedAt: Date;
 }

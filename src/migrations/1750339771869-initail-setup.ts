@@ -1,0 +1,120 @@
+import { MigrationInterface, QueryRunner } from "typeorm";
+
+export class InitailSetup1750339771869 implements MigrationInterface {
+    name = 'InitailSetup1750339771869'
+
+    public async up(queryRunner: QueryRunner): Promise<void> {
+        await queryRunner.query(`CREATE TABLE "VerifyEmailOtp" ("id" SERIAL NOT NULL, "email" character varying NOT NULL, "otp" character varying NOT NULL, "expiry" TIMESTAMP NOT NULL, "createdAt" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(), "updatedAt" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(), CONSTRAINT "PK_3a451f65ab0ee67c137e7f64a52" PRIMARY KEY ("id"))`);
+        await queryRunner.query(`CREATE TABLE "UserRoles" ("id" SERIAL NOT NULL, "name" character varying NOT NULL, "createdAt" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(), "updatedAt" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(), CONSTRAINT "UQ_81a6a5d9ddce049343c884aad67" UNIQUE ("name"), CONSTRAINT "PK_a44a2382829972daa2a31345f56" PRIMARY KEY ("id"))`);
+        await queryRunner.query(`CREATE TABLE "PasswordResetOTP" ("id" SERIAL NOT NULL, "otp" character varying NOT NULL, "expiry" TIMESTAMP WITH TIME ZONE NOT NULL, "isVerified" boolean NOT NULL DEFAULT false, "createdAt" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(), "updatedAt" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(), "userId" integer, CONSTRAINT "PK_f5777573269215ecd69900f4e6a" PRIMARY KEY ("id"))`);
+        await queryRunner.query(`CREATE TABLE "CuisineType" ("id" SERIAL NOT NULL, "name" character varying NOT NULL, "imageUrl" character varying, "isDeleted" boolean NOT NULL DEFAULT false, "isActive" boolean NOT NULL DEFAULT true, "createdAt" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(), "updatedAt" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(), CONSTRAINT "PK_2710e6912422ef32436d4cec42c" PRIMARY KEY ("id"))`);
+        await queryRunner.query(`CREATE TYPE "public"."Restaurant_accountstatus_enum" AS ENUM('pending', 'underReview', 'approved', 'rejected')`);
+        await queryRunner.query(`CREATE TABLE "Restaurant" ("id" SERIAL NOT NULL, "userId" integer, "restaurantName" character varying NOT NULL, "restaurantDetails" character varying NOT NULL, "address" character varying NOT NULL, "latitude" double precision NOT NULL, "longitude" double precision NOT NULL, "locationPoint" geometry(Point,4326) NOT NULL, "rating" numeric(10,2), "isDeleted" boolean NOT NULL DEFAULT false, "isActive" boolean NOT NULL DEFAULT false, "certificateOfHospitality" character varying, "certificateOfTourism" character varying, "menu" character varying, "rejectReason" character varying, "slotDuration" numeric(10,2), "accountStatus" "public"."Restaurant_accountstatus_enum" NOT NULL DEFAULT 'pending', "createdAt" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(), "updatedAt" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(), "cuisineTypeId" integer, CONSTRAINT "REL_e2adeb16635b211beb11029c25" UNIQUE ("userId"), CONSTRAINT "PK_f7319ac66e592c47caa1792bf84" PRIMARY KEY ("id"))`);
+        await queryRunner.query(`CREATE INDEX "IDX_745cc2dbc013de1c19d2c06edc" ON "Restaurant" USING GiST ("locationPoint") `);
+        await queryRunner.query(`CREATE TABLE "SignUpOtp" ("id" SERIAL NOT NULL, "otp" character varying NOT NULL, "createdAt" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(), "updatedAt" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(), "userId" integer, CONSTRAINT "PK_943a849c7633175b75b2b78c6c6" PRIMARY KEY ("id"))`);
+        await queryRunner.query(`CREATE TABLE "Password" ("id" SERIAL NOT NULL, "password" character varying NOT NULL, "createdAt" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(), "updatedAt" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(), "userId" integer, CONSTRAINT "REL_395446211762863322436d8eff" UNIQUE ("userId"), CONSTRAINT "PK_07377bffb1bb311a73ed9e2b514" PRIMARY KEY ("id"))`);
+        await queryRunner.query(`CREATE TABLE "SocialLogin" ("id" SERIAL NOT NULL, "platform" character varying NOT NULL, "platformId" character varying NOT NULL, "isVerified" boolean NOT NULL DEFAULT false, "isActive" boolean NOT NULL DEFAULT true, "createdAt" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(), "updatedAt" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(), "userId" integer, CONSTRAINT "REL_950f10d88e56a158e9efdfe011" UNIQUE ("userId"), CONSTRAINT "PK_246eb0cd970ac38d79395184ead" PRIMARY KEY ("id"))`);
+        await queryRunner.query(`CREATE TYPE "public"."DeleteReason_role_enum" AS ENUM('restaurant', 'user')`);
+        await queryRunner.query(`CREATE TABLE "DeleteReason" ("id" SERIAL NOT NULL, "deleteReason" character varying NOT NULL, "role" "public"."DeleteReason_role_enum" NOT NULL, "createdAt" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(), "updatedAt" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(), CONSTRAINT "PK_3355f6b16a5e1a75c667a72dc8f" PRIMARY KEY ("id"))`);
+        await queryRunner.query(`CREATE TYPE "public"."DeletedUsers_role_enum" AS ENUM('restaurant', 'user')`);
+        await queryRunner.query(`CREATE TABLE "DeletedUsers" ("id" SERIAL NOT NULL, "role" "public"."DeletedUsers_role_enum" NOT NULL, "otherReason" character varying, "createdAt" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(), "updatedAt" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(), "deleteReasonId" integer, "userId" integer, CONSTRAINT "REL_4207b3a41f18842ebe62466549" UNIQUE ("userId"), CONSTRAINT "PK_6075092217f7165cff6e588e4d6" PRIMARY KEY ("id"))`);
+        await queryRunner.query(`CREATE TABLE "OperationalHour" ("id" SERIAL NOT NULL, "day" character varying NOT NULL, "startTime" TIME, "endTime" TIME, "userId" integer NOT NULL, "isDeleted" boolean NOT NULL DEFAULT false, "isActive" boolean NOT NULL DEFAULT true, "isClosed" boolean NOT NULL DEFAULT false, "createdAt" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(), "updatedAt" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(), CONSTRAINT "PK_646bdf25c8cdba35d64359f25d6" PRIMARY KEY ("id"))`);
+        await queryRunner.query(`CREATE TABLE "FavouriteRestaurant" ("id" SERIAL NOT NULL, "userId" integer NOT NULL, "restaurantId" integer NOT NULL, "createdAt" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(), "updatedAt" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(), CONSTRAINT "PK_e0ceb82285f0a3f6e6f68553697" PRIMARY KEY ("id"))`);
+        await queryRunner.query(`CREATE TABLE "PaymentMethods" ("id" SERIAL NOT NULL, "name" character varying NOT NULL, "isDeleted" boolean NOT NULL DEFAULT false, "isActive" boolean NOT NULL DEFAULT true, "createdAt" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(), "updatedAt" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(), CONSTRAINT "PK_0981b742c60ac062ed17718cca0" PRIMARY KEY ("id"))`);
+        await queryRunner.query(`CREATE TABLE "RestaurantPaymentMethods" ("id" SERIAL NOT NULL, "name" character varying NOT NULL, "userId" integer NOT NULL, "paymentMethodId" integer NOT NULL, "isDeleted" boolean NOT NULL DEFAULT false, "isActive" boolean NOT NULL DEFAULT true, "createdAt" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(), "updatedAt" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(), CONSTRAINT "PK_14cff7934256ea05fe8b7de289c" PRIMARY KEY ("id"))`);
+        await queryRunner.query(`CREATE TABLE "Users" ("id" SERIAL NOT NULL, "email" character varying NOT NULL, "deviceId" character varying, "firstName" character varying, "lastName" character varying, "profilePicture" character varying, "about" character varying, "phoneNumber" character varying NOT NULL, "address" character varying, "isActive" boolean NOT NULL DEFAULT false, "isDeleted" boolean NOT NULL DEFAULT false, "isSocialLogin" boolean NOT NULL DEFAULT false, "isVerified" boolean NOT NULL DEFAULT false, "createdAt" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(), "updatedAt" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(), "roleId" integer, CONSTRAINT "UQ_3c3ab3f49a87e6ddb607f3c4945" UNIQUE ("email"), CONSTRAINT "PK_16d4f7d636df336db11d87413e3" PRIMARY KEY ("id"))`);
+        await queryRunner.query(`CREATE TABLE "Slot" ("id" SERIAL NOT NULL, "day" character varying NOT NULL, "startTime" character varying NOT NULL, "endTime" character varying NOT NULL, "userId" integer NOT NULL, "isDeleted" boolean NOT NULL DEFAULT false, "isActive" boolean NOT NULL DEFAULT true, "createdAt" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(), "updatedAt" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(), CONSTRAINT "PK_809ea494975a8fc7e88bce0a297" PRIMARY KEY ("id"))`);
+        await queryRunner.query(`CREATE TABLE "UnavailableSlot" ("id" SERIAL NOT NULL, "userId" integer NOT NULL, "slotId" integer NOT NULL, "date" character varying NOT NULL, "startTime" character varying NOT NULL, "endTime" character varying NOT NULL, "createdAt" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(), "updatedAt" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(), CONSTRAINT "PK_a1e5c545a2384b4a8a3154ea9d6" PRIMARY KEY ("id"))`);
+        await queryRunner.query(`CREATE TYPE "public"."Bookings_status_enum" AS ENUM('scheduled', 'inProgress', 'completed', 'cancelled')`);
+        await queryRunner.query(`CREATE TYPE "public"."Bookings_cancelby_enum" AS ENUM('user', 'restaurant', 'admin')`);
+        await queryRunner.query(`CREATE TABLE "Bookings" ("id" SERIAL NOT NULL, "startDateTime" character varying NOT NULL, "endDateTime" character varying NOT NULL, "checkInAt" character varying, "cancelAt" character varying, "slotStartTime" character varying NOT NULL, "slotEndTime" character varying NOT NULL, "bookingDate" character varying NOT NULL, "status" "public"."Bookings_status_enum" NOT NULL DEFAULT 'scheduled', "location" character varying NOT NULL, "customerName" character varying, "reviewAdded" boolean NOT NULL DEFAULT false, "latitude" double precision, "longitude" double precision, "locationPoint" geometry(Point,4326), "timeZone" character varying, "cancelBy" "public"."Bookings_cancelby_enum", "cancelReason" character varying, "guestCount" integer NOT NULL, "specialRequest" character varying, "day" character varying, "date" character varying, "isActive" boolean NOT NULL DEFAULT true, "isDeleted" boolean NOT NULL DEFAULT false, "createdAt" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(), "updatedAt" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(), "customerId" integer, "restaurantId" integer, CONSTRAINT "PK_383e0a5652b33012e15e1d0192a" PRIMARY KEY ("id"))`);
+        await queryRunner.query(`CREATE INDEX "IDX_0be69487cee635e272f4c7b8bb" ON "Bookings" USING GiST ("locationPoint") `);
+        await queryRunner.query(`CREATE TABLE "Reviews" ("id" SERIAL NOT NULL, "rating" numeric(10,2) NOT NULL, "remarks" character varying, "isActive" boolean DEFAULT true, "bookingId" integer NOT NULL, "customerId" integer NOT NULL, "restaurantId" integer NOT NULL, "createdAt" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(), "updatedAt" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(), CONSTRAINT "REL_e64b0a5d5b8e50991754788c24" UNIQUE ("bookingId"), CONSTRAINT "PK_5ae106da7bc18dc3731e48a8a94" PRIMARY KEY ("id"))`);
+        await queryRunner.query(`CREATE TABLE "RestaurantImages" ("id" SERIAL NOT NULL, "imageUrl" character varying NOT NULL, "isMain" boolean NOT NULL DEFAULT false, "restaurantId" integer NOT NULL, "createdAt" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(), "updatedAt" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(), CONSTRAINT "PK_b0b14d257b720bc8a2e80bb421a" PRIMARY KEY ("id"))`);
+        await queryRunner.query(`CREATE TABLE "Notification" ("id" SERIAL NOT NULL, "notificationId" integer NOT NULL, "jobId" integer, "type" character varying NOT NULL, "isSeen" boolean NOT NULL DEFAULT false, "title" character varying, "body" character varying, "restaurantName" character varying, "createdAt" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(), "updatedAt" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(), "purpose" character varying, "senderId" integer, "receiverId" integer, CONSTRAINT "PK_da18f6446b6fea585f01d03f56c" PRIMARY KEY ("id"))`);
+        await queryRunner.query(`CREATE TABLE "HelpAndSupport" ("id" SERIAL NOT NULL, "emailForCustomers" character varying NOT NULL, "emailForRestaurants" character varying NOT NULL, "phoneForCustomers" character varying NOT NULL, "phoneForRestaurants" character varying NOT NULL, "createdAt" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(), "updatedAt" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(), CONSTRAINT "PK_4a082996c15f293abc73447c63d" PRIMARY KEY ("id"))`);
+        await queryRunner.query(`ALTER TABLE "PasswordResetOTP" ADD CONSTRAINT "FK_5bdc344d58aab451bb21f4c9bf8" FOREIGN KEY ("userId") REFERENCES "Users"("id") ON DELETE CASCADE ON UPDATE NO ACTION`);
+        await queryRunner.query(`ALTER TABLE "Restaurant" ADD CONSTRAINT "FK_e2adeb16635b211beb11029c256" FOREIGN KEY ("userId") REFERENCES "Users"("id") ON DELETE NO ACTION ON UPDATE NO ACTION`);
+        await queryRunner.query(`ALTER TABLE "Restaurant" ADD CONSTRAINT "FK_23bf1745beee1a5f67851c0f98e" FOREIGN KEY ("cuisineTypeId") REFERENCES "CuisineType"("id") ON DELETE NO ACTION ON UPDATE NO ACTION`);
+        await queryRunner.query(`ALTER TABLE "SignUpOtp" ADD CONSTRAINT "FK_6c869de9d164faba0caabf9728b" FOREIGN KEY ("userId") REFERENCES "Users"("id") ON DELETE CASCADE ON UPDATE NO ACTION`);
+        await queryRunner.query(`ALTER TABLE "Password" ADD CONSTRAINT "FK_395446211762863322436d8effa" FOREIGN KEY ("userId") REFERENCES "Users"("id") ON DELETE NO ACTION ON UPDATE NO ACTION`);
+        await queryRunner.query(`ALTER TABLE "SocialLogin" ADD CONSTRAINT "FK_950f10d88e56a158e9efdfe011e" FOREIGN KEY ("userId") REFERENCES "Users"("id") ON DELETE CASCADE ON UPDATE NO ACTION`);
+        await queryRunner.query(`ALTER TABLE "DeletedUsers" ADD CONSTRAINT "FK_0a71e9660b12f142176108773d5" FOREIGN KEY ("deleteReasonId") REFERENCES "DeleteReason"("id") ON DELETE NO ACTION ON UPDATE NO ACTION`);
+        await queryRunner.query(`ALTER TABLE "DeletedUsers" ADD CONSTRAINT "FK_4207b3a41f18842ebe624665498" FOREIGN KEY ("userId") REFERENCES "Users"("id") ON DELETE NO ACTION ON UPDATE NO ACTION`);
+        await queryRunner.query(`ALTER TABLE "OperationalHour" ADD CONSTRAINT "FK_896282abbca19854762c4de384a" FOREIGN KEY ("userId") REFERENCES "Users"("id") ON DELETE CASCADE ON UPDATE NO ACTION`);
+        await queryRunner.query(`ALTER TABLE "FavouriteRestaurant" ADD CONSTRAINT "FK_77b3d9fb9ca667ae3c7f1c838e0" FOREIGN KEY ("userId") REFERENCES "Users"("id") ON DELETE NO ACTION ON UPDATE NO ACTION`);
+        await queryRunner.query(`ALTER TABLE "FavouriteRestaurant" ADD CONSTRAINT "FK_e545f95a563f94f6f3686b0bad3" FOREIGN KEY ("restaurantId") REFERENCES "Users"("id") ON DELETE NO ACTION ON UPDATE NO ACTION`);
+        await queryRunner.query(`ALTER TABLE "RestaurantPaymentMethods" ADD CONSTRAINT "FK_48ebb2c2895be37dd061db5f07d" FOREIGN KEY ("userId") REFERENCES "Users"("id") ON DELETE NO ACTION ON UPDATE NO ACTION`);
+        await queryRunner.query(`ALTER TABLE "RestaurantPaymentMethods" ADD CONSTRAINT "FK_5e77c5b803c3768b0a11ffdbe5a" FOREIGN KEY ("paymentMethodId") REFERENCES "PaymentMethods"("id") ON DELETE NO ACTION ON UPDATE NO ACTION`);
+        await queryRunner.query(`ALTER TABLE "Users" ADD CONSTRAINT "FK_65c56db5a9988b90b0d7245e0f0" FOREIGN KEY ("roleId") REFERENCES "UserRoles"("id") ON DELETE NO ACTION ON UPDATE NO ACTION`);
+        await queryRunner.query(`ALTER TABLE "Slot" ADD CONSTRAINT "FK_b68fd9805e05dc9b498fb94b25d" FOREIGN KEY ("userId") REFERENCES "Users"("id") ON DELETE NO ACTION ON UPDATE NO ACTION`);
+        await queryRunner.query(`ALTER TABLE "UnavailableSlot" ADD CONSTRAINT "FK_c14db0bf89372368c0df37c3ce5" FOREIGN KEY ("userId") REFERENCES "Users"("id") ON DELETE NO ACTION ON UPDATE NO ACTION`);
+        await queryRunner.query(`ALTER TABLE "UnavailableSlot" ADD CONSTRAINT "FK_ac352c7dc6b44f62436ab507e57" FOREIGN KEY ("slotId") REFERENCES "Slot"("id") ON DELETE NO ACTION ON UPDATE NO ACTION`);
+        await queryRunner.query(`ALTER TABLE "Bookings" ADD CONSTRAINT "FK_ea97bc6631929a37e4a7c417497" FOREIGN KEY ("customerId") REFERENCES "Users"("id") ON DELETE NO ACTION ON UPDATE NO ACTION`);
+        await queryRunner.query(`ALTER TABLE "Bookings" ADD CONSTRAINT "FK_332d53f81f5f51e47f46eaa7fe5" FOREIGN KEY ("restaurantId") REFERENCES "Users"("id") ON DELETE NO ACTION ON UPDATE NO ACTION`);
+        await queryRunner.query(`ALTER TABLE "Reviews" ADD CONSTRAINT "FK_e64b0a5d5b8e50991754788c24b" FOREIGN KEY ("bookingId") REFERENCES "Bookings"("id") ON DELETE NO ACTION ON UPDATE NO ACTION`);
+        await queryRunner.query(`ALTER TABLE "Reviews" ADD CONSTRAINT "FK_92c625f36e4e5d23f6ab06cae43" FOREIGN KEY ("customerId") REFERENCES "Users"("id") ON DELETE NO ACTION ON UPDATE NO ACTION`);
+        await queryRunner.query(`ALTER TABLE "Reviews" ADD CONSTRAINT "FK_c647f50e02b11f7588cda018bad" FOREIGN KEY ("restaurantId") REFERENCES "Users"("id") ON DELETE NO ACTION ON UPDATE NO ACTION`);
+        await queryRunner.query(`ALTER TABLE "RestaurantImages" ADD CONSTRAINT "FK_39492a1c3487281d41f33fadfff" FOREIGN KEY ("restaurantId") REFERENCES "Users"("id") ON DELETE NO ACTION ON UPDATE NO ACTION`);
+        await queryRunner.query(`ALTER TABLE "Notification" ADD CONSTRAINT "FK_3140f3f157b4bec92aef4148ad2" FOREIGN KEY ("senderId") REFERENCES "Users"("id") ON DELETE NO ACTION ON UPDATE NO ACTION`);
+        await queryRunner.query(`ALTER TABLE "Notification" ADD CONSTRAINT "FK_74eac25b46bcb7622f1de5e3288" FOREIGN KEY ("receiverId") REFERENCES "Users"("id") ON DELETE NO ACTION ON UPDATE NO ACTION`);
+    }
+
+    public async down(queryRunner: QueryRunner): Promise<void> {
+        await queryRunner.query(`ALTER TABLE "Notification" DROP CONSTRAINT "FK_74eac25b46bcb7622f1de5e3288"`);
+        await queryRunner.query(`ALTER TABLE "Notification" DROP CONSTRAINT "FK_3140f3f157b4bec92aef4148ad2"`);
+        await queryRunner.query(`ALTER TABLE "RestaurantImages" DROP CONSTRAINT "FK_39492a1c3487281d41f33fadfff"`);
+        await queryRunner.query(`ALTER TABLE "Reviews" DROP CONSTRAINT "FK_c647f50e02b11f7588cda018bad"`);
+        await queryRunner.query(`ALTER TABLE "Reviews" DROP CONSTRAINT "FK_92c625f36e4e5d23f6ab06cae43"`);
+        await queryRunner.query(`ALTER TABLE "Reviews" DROP CONSTRAINT "FK_e64b0a5d5b8e50991754788c24b"`);
+        await queryRunner.query(`ALTER TABLE "Bookings" DROP CONSTRAINT "FK_332d53f81f5f51e47f46eaa7fe5"`);
+        await queryRunner.query(`ALTER TABLE "Bookings" DROP CONSTRAINT "FK_ea97bc6631929a37e4a7c417497"`);
+        await queryRunner.query(`ALTER TABLE "UnavailableSlot" DROP CONSTRAINT "FK_ac352c7dc6b44f62436ab507e57"`);
+        await queryRunner.query(`ALTER TABLE "UnavailableSlot" DROP CONSTRAINT "FK_c14db0bf89372368c0df37c3ce5"`);
+        await queryRunner.query(`ALTER TABLE "Slot" DROP CONSTRAINT "FK_b68fd9805e05dc9b498fb94b25d"`);
+        await queryRunner.query(`ALTER TABLE "Users" DROP CONSTRAINT "FK_65c56db5a9988b90b0d7245e0f0"`);
+        await queryRunner.query(`ALTER TABLE "RestaurantPaymentMethods" DROP CONSTRAINT "FK_5e77c5b803c3768b0a11ffdbe5a"`);
+        await queryRunner.query(`ALTER TABLE "RestaurantPaymentMethods" DROP CONSTRAINT "FK_48ebb2c2895be37dd061db5f07d"`);
+        await queryRunner.query(`ALTER TABLE "FavouriteRestaurant" DROP CONSTRAINT "FK_e545f95a563f94f6f3686b0bad3"`);
+        await queryRunner.query(`ALTER TABLE "FavouriteRestaurant" DROP CONSTRAINT "FK_77b3d9fb9ca667ae3c7f1c838e0"`);
+        await queryRunner.query(`ALTER TABLE "OperationalHour" DROP CONSTRAINT "FK_896282abbca19854762c4de384a"`);
+        await queryRunner.query(`ALTER TABLE "DeletedUsers" DROP CONSTRAINT "FK_4207b3a41f18842ebe624665498"`);
+        await queryRunner.query(`ALTER TABLE "DeletedUsers" DROP CONSTRAINT "FK_0a71e9660b12f142176108773d5"`);
+        await queryRunner.query(`ALTER TABLE "SocialLogin" DROP CONSTRAINT "FK_950f10d88e56a158e9efdfe011e"`);
+        await queryRunner.query(`ALTER TABLE "Password" DROP CONSTRAINT "FK_395446211762863322436d8effa"`);
+        await queryRunner.query(`ALTER TABLE "SignUpOtp" DROP CONSTRAINT "FK_6c869de9d164faba0caabf9728b"`);
+        await queryRunner.query(`ALTER TABLE "Restaurant" DROP CONSTRAINT "FK_23bf1745beee1a5f67851c0f98e"`);
+        await queryRunner.query(`ALTER TABLE "Restaurant" DROP CONSTRAINT "FK_e2adeb16635b211beb11029c256"`);
+        await queryRunner.query(`ALTER TABLE "PasswordResetOTP" DROP CONSTRAINT "FK_5bdc344d58aab451bb21f4c9bf8"`);
+        await queryRunner.query(`DROP TABLE "HelpAndSupport"`);
+        await queryRunner.query(`DROP TABLE "Notification"`);
+        await queryRunner.query(`DROP TABLE "RestaurantImages"`);
+        await queryRunner.query(`DROP TABLE "Reviews"`);
+        await queryRunner.query(`DROP INDEX "public"."IDX_0be69487cee635e272f4c7b8bb"`);
+        await queryRunner.query(`DROP TABLE "Bookings"`);
+        await queryRunner.query(`DROP TYPE "public"."Bookings_cancelby_enum"`);
+        await queryRunner.query(`DROP TYPE "public"."Bookings_status_enum"`);
+        await queryRunner.query(`DROP TABLE "UnavailableSlot"`);
+        await queryRunner.query(`DROP TABLE "Slot"`);
+        await queryRunner.query(`DROP TABLE "Users"`);
+        await queryRunner.query(`DROP TABLE "RestaurantPaymentMethods"`);
+        await queryRunner.query(`DROP TABLE "PaymentMethods"`);
+        await queryRunner.query(`DROP TABLE "FavouriteRestaurant"`);
+        await queryRunner.query(`DROP TABLE "OperationalHour"`);
+        await queryRunner.query(`DROP TABLE "DeletedUsers"`);
+        await queryRunner.query(`DROP TYPE "public"."DeletedUsers_role_enum"`);
+        await queryRunner.query(`DROP TABLE "DeleteReason"`);
+        await queryRunner.query(`DROP TYPE "public"."DeleteReason_role_enum"`);
+        await queryRunner.query(`DROP TABLE "SocialLogin"`);
+        await queryRunner.query(`DROP TABLE "Password"`);
+        await queryRunner.query(`DROP TABLE "SignUpOtp"`);
+        await queryRunner.query(`DROP INDEX "public"."IDX_745cc2dbc013de1c19d2c06edc"`);
+        await queryRunner.query(`DROP TABLE "Restaurant"`);
+        await queryRunner.query(`DROP TYPE "public"."Restaurant_accountstatus_enum"`);
+        await queryRunner.query(`DROP TABLE "CuisineType"`);
+        await queryRunner.query(`DROP TABLE "PasswordResetOTP"`);
+        await queryRunner.query(`DROP TABLE "UserRoles"`);
+        await queryRunner.query(`DROP TABLE "VerifyEmailOtp"`);
+    }
+
+}

@@ -1,16 +1,16 @@
-import { NextFunction, Request, Response } from "express";
-import { BaseError } from "../errors/base.error";
-import { BadRequestError } from "../errors/badRequest.error";
-import { ForbiddenError } from "../errors/forbidden.error";
-import { NotFoundError } from "../errors/notFound.error";
-import { ZodError } from "zod";
-import { fromZodError } from "zod-validation-error";
+import { NextFunction, Request, Response } from 'express';
+import { BaseError } from '../errors/base.error';
+import { BadRequestError } from '../errors/badRequest.error';
+import { ForbiddenError } from '../errors/forbidden.error';
+import { NotFoundError } from '../errors/notFound.error';
+import { ZodError } from 'zod';
+import { fromZodError } from 'zod-validation-error';
 
 export default function errHandlingMiddleware(error: BaseError, req: Request, res: Response, next: NextFunction) {
   if (error instanceof BadRequestError) return res.status(400).json({ message: error.message });
   if (error instanceof ZodError) {
     const zodError = fromZodError(error);
-    const message = zodError.message.replace("Validation error: ", "");
+    const message = zodError.message.replace('Validation error: ', '');
     const normalizedMessage = message.substring(0, message.indexOf(' at "'));
     return res.status(400).json({ message: normalizedMessage });
   }

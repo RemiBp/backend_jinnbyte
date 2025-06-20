@@ -1,6 +1,7 @@
-import jwt from "jsonwebtoken";
-import dotenv from "dotenv";
-import { BadRequestError } from "../errors/badRequest.error";
+import jwt from 'jsonwebtoken';
+import dotenv from 'dotenv';
+import ms from 'ms';
+import { BadRequestError } from '../errors/badRequest.error';
 
 dotenv.config();
 
@@ -8,35 +9,36 @@ interface Payload {
   id: number;
 }
 
-export function generateJWT(payload: Payload, secret: string, expiresIn: any) {
+const JWT_ACCESS_SECRET = process.env.JWT_ACCESS_SECRET as string;
+const JWT_REFRESH_SECRET = process.env.JWT_REFRESH_SECRET as string;
+const JWT_ACCESS_EXPIRY: string = process.env.JWT_ACCESS_EXPIRY || '1d';
+const JWT_REFRESH_EXPIRY: string = process.env.JWT_REFRESH_EXPIRY || '7d';
+
+const accessExpiryInMs = ms(JWT_ACCESS_EXPIRY as ms.StringValue);
+if (isNaN(accessExpiryInMs)) {
+  throw new Error('Invalid JWT Access Expiry value');
+}
+
+const refreshExpiryInMs = ms(JWT_REFRESH_EXPIRY as ms.StringValue);
+if (isNaN(refreshExpiryInMs)) {
+  throw new Error('Invalid JWT Refresh Expiry value');
+}
+
+export function generateJWT(payload: Payload, secret: string, expiresIn: number) {
   const token = jwt.sign(payload, secret, { expiresIn });
   return token;
 }
 
 export function generateJWTPair(payload: Payload) {
-  const token = generateJWT(payload, process.env.JWT_ACCESS_SECRET, process.env.JWT_ACCESS_EXPIRY);
-  const refreshToken = generateJWT(payload, process.env.JWT_REFRESH_SECRET, process.env.JWT_REFRESH_EXPIRY);
+  const token = generateJWT(payload, JWT_ACCESS_SECRET, accessExpiryInMs);
+  const refreshToken = generateJWT(payload, JWT_REFRESH_SECRET, refreshExpiryInMs);
   return { token, refreshToken };
 }
 
 export function verifyRefreshJWT(token: string) {
-  if (!token) {
-    throw new BadRequestError("Token is missing");
-  }
+  const payload = jwt.verify(token, JWT_REFRESH_SECRET) as Payload;
 
-  if (!process.env.JWT_REFRESH_SECRET) {
-    throw new Error("JWT_REFRESH_SECRET is not defined in environment variables");
-  }
+  if (!payload) throw new BadRequestError('Invalid token');
 
-  try {
-    if (typeof token !== "string" || token.trim() === "") {
-      throw new BadRequestError("Invalid token format");
-    }
-    const payload = jwt.verify(token, process.env.JWT_REFRESH_SECRET) as Payload;
-    return payload;
-  } catch (error) {
-    throw new BadRequestError("Invalid token: " + error);
-  }
+  return payload;
 }
-
-// console.log(generateJWTPair({ id: 1 }));
