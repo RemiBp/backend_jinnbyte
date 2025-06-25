@@ -3,7 +3,7 @@ import dotenv from 'dotenv';
 import errHandlingMiddleware from './middlewares/error.middleware';
 import cors from 'cors';
 import AppRouter from './routes/app';
-import RestaurantRouter from './routes/producer';
+import ProducerRouter from './routes/producer';
 import adminRouter from './routes/admin';
 
 const WEBAPP_URL = process.env.WEBAPP_URL;
@@ -22,7 +22,7 @@ app.use(cors({ origin: '*' }));
 app.use(express.urlencoded({ extended: true }));
 
 app.use('/api/app', AppRouter);
-app.use('/api/restaurant', RestaurantRouter);
+app.use('/api/producer', ProducerRouter);
 app.use('/api/admin', adminRouter);
 app.use(errHandlingMiddleware);
 

@@ -23,6 +23,7 @@ import OperationalHour from './OperationalHours';
 import FavouriteRestaurant from './FavouriteRestaurant';
 import PaymentMethods from './PaymentMethods';
 import RestaurantPaymentMethods from './RestaurantPaymentMethods';
+import BusinessProfile from './BusinessProfile';
 
 @Entity('Users')
 export default class User {
@@ -41,8 +42,11 @@ export default class User {
   @Column({ nullable: true })
   userName: string;
 
-  @Column()
+  @Column({ nullable: true })
   phoneNumber: string;
+
+  @OneToOne(() => BusinessProfile, profile => profile.user, { cascade: true })
+  businessProfile: BusinessProfile;
 
   @Column({ default: false })
   isActive: boolean;

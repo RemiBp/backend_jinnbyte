@@ -127,7 +127,7 @@ export const refreshAccessToken = async (req: Request, res: Response, next: Next
 
 export const socialLogin = async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const { deviceId, provider, token } = req.body;
+    const { deviceId, provider, token, roleName } = req.body;
     if (!deviceId) {
       throw new Error('deviceId is required');
     }
@@ -137,7 +137,10 @@ export const socialLogin = async (req: Request, res: Response, next: NextFunctio
     if (!token) {
       throw new Error('token is required');
     }
-    const response = await AuthService.socialLogin(deviceId, provider, token);
+    if (!roleName) {
+      throw new Error('roleName is required');
+    }
+    const response = await AuthService.socialLogin(deviceId, provider, token, roleName);
     res.status(200).json(response);
   } catch (error) {
     next(error);

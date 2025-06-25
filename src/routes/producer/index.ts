@@ -1,16 +1,16 @@
 import { Router } from 'express';
-import RestaurantAuthRouter from './auth.route';
-import RestaurantProfileRouter from './profile.router';
-import RestaurantBookingRouter from './booking.route';
+import ProducerAuthRouter from './auth.route';
+import ProducerProfileRouter from './profile.router';
+import ProducerBookingRouter from './booking.route';
 
-const RestaurantRouter = Router();
+const ProducerRouter = Router();
 
-RestaurantRouter.get('/', (req, res) => {
-  res.send('Hit Restaurant route');
+ProducerRouter.get('/', (req, res) => {
+  res.send('Hit Producer route');
 });
 
-RestaurantRouter.use('/auth', RestaurantAuthRouter);
-RestaurantRouter.use('/profile', RestaurantProfileRouter);
-RestaurantRouter.use('/booking', RestaurantBookingRouter);
+ProducerRouter.use('/auth', ProducerAuthRouter);
+ProducerRouter.use('/profile', ProducerProfileRouter);
+ProducerRouter.use('/booking', ProducerBookingRouter);
 
-export default RestaurantRouter;
+export default ProducerRouter;

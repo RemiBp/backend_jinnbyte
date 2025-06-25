@@ -1,19 +1,15 @@
 import { z } from 'zod';
+import { businessRoles } from '../../utils/businessRoles';
 
 export const signUpSchema = z.object({
-  restaurantName: z.string({ required_error: 'restaurantName is required' }).trim(),
   email: z
     .string({ required_error: 'Email is required' })
     .trim()
     .email({ message: 'Invalid email' })
     .transform(val => val.toLowerCase()),
-  phoneNumber: z.string({ required_error: 'phone is required' }).trim(),
-  cuisineTypeId: z.number({ required_error: 'cuisineTypeId is required' }),
-  address: z.string({ required_error: 'address is required' }).trim(),
   password: z.string({ required_error: 'Password is required' }).trim(),
-  restaurantDetails: z.string({ required_error: 'restaurantDetails is required' }).trim(),
-  latitude: z.number({ required_error: 'latitude is required' }),
-  longitude: z.number({ required_error: 'longitude is required' }),
+  businessName: z.string().trim().min(2),
+  role: z.enum(businessRoles),
 });
 
 export type SignUp = z.infer<typeof signUpSchema>;

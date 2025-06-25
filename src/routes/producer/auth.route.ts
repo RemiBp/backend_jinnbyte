@@ -1,21 +1,21 @@
 import { Router } from 'express';
 import { AuthController } from '../../controllers/producer/auth.controller';
 
-const RestaurantAuthRouter = Router();
-RestaurantAuthRouter.get('/', (req, res) => {
+const ProducerAuthRouter = Router();
+ProducerAuthRouter.get('/', (req, res) => {
   res.send('Hit Technician auth route');
 });
 
-RestaurantAuthRouter.post('/register', AuthController.register);
-RestaurantAuthRouter.post('/login', AuthController.login);
-RestaurantAuthRouter.post('/verifyOtp', AuthController.verifyOtp);
-RestaurantAuthRouter.post('/resendSignUpOtp', AuthController.resendSignUpOtp);
-RestaurantAuthRouter.post('/forgotPassword', AuthController.forgotPassword);
-RestaurantAuthRouter.post('/resendForgotPasswordOtp', AuthController.resendForgotPasswordOtp);
-RestaurantAuthRouter.post('/verifyForgotPasswordOtp', AuthController.verifyForgotPasswordOtp);
-RestaurantAuthRouter.post('/resetPassword', AuthController.resetPassword);
-RestaurantAuthRouter.post('/refreshAccessToken', AuthController.refreshAccessToken);
-RestaurantAuthRouter.post('/socialLogin', AuthController.socialLogin);
-RestaurantAuthRouter.post('/checkTokenDetails', AuthController.checkTokenDetails);
-RestaurantAuthRouter.get('/getCuisineTypes', AuthController.getCuisineTypes);
-export default RestaurantAuthRouter;
+ProducerAuthRouter.post('/register', AuthController.register);
+ProducerAuthRouter.post('/login', AuthController.login);
+ProducerAuthRouter.post('/verifyOtp', AuthController.verifyOtp);
+ProducerAuthRouter.post('/resendSignUpOtp', AuthController.resendSignUpOtp);
+ProducerAuthRouter.post('/forgotPassword', AuthController.forgotPassword);
+ProducerAuthRouter.post('/resendForgotPasswordOtp', AuthController.resendForgotPasswordOtp);
+ProducerAuthRouter.post('/verifyForgotPasswordOtp', AuthController.verifyForgotPasswordOtp);
+ProducerAuthRouter.post('/resetPassword', AuthController.resetPassword);
+ProducerAuthRouter.post('/refreshAccessToken', AuthController.refreshAccessToken);
+ProducerAuthRouter.post('/socialLogin', AuthController.socialLogin);
+ProducerAuthRouter.post('/checkTokenDetails', AuthController.checkTokenDetails);
+ProducerAuthRouter.get('/getCuisineTypes', AuthController.getCuisineTypes);
+export default ProducerAuthRouter;
