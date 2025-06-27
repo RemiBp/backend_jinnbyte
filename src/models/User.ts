@@ -24,6 +24,7 @@ import FavouriteRestaurant from './FavouriteRestaurant';
 import PaymentMethods from './PaymentMethods';
 import RestaurantPaymentMethods from './RestaurantPaymentMethods';
 import BusinessProfile from './BusinessProfile';
+import Producer from './Producer';
 
 @Entity('Users')
 export default class User {
@@ -81,6 +82,9 @@ export default class User {
     cascade: true,
   })
   restaurant: Restaurant;
+
+  @OneToOne(() => Producer, producer => producer.user)
+  producer: Producer;
 
   @OneToOne(() => SocialLogin, socialLogin => socialLogin.user)
   socialLogin: SocialLogin;

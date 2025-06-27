@@ -1,0 +1,112 @@
+import {
+    Entity,
+    PrimaryGeneratedColumn,
+    Column,
+    CreateDateColumn,
+    UpdateDateColumn,
+    Index,
+    OneToMany,
+    OneToOne,
+    JoinColumn,
+    ManyToOne,
+} from 'typeorm';
+import Photo from './Photos';
+import AIAnalysis from './AIAnalysis';
+import GlobalRating from './GlobalRating';
+import OpeningHours from './OpeningHours';
+import User from './User';
+import { BusinessRole } from '../enums/Producer.enum';
+import { ProducerStatus } from '../enums/producerStatus.enum';
+
+@Entity('Producers')
+export default class Producer {
+    @PrimaryGeneratedColumn()
+    id: number;
+
+    @Column()
+    name: string;
+
+    @Column()
+    address: string;
+
+    @Column({ nullable: true })
+    city: string;
+
+    @Column({ nullable: true })
+    country: string;
+
+    @Column({ nullable: true })
+    details: string;
+
+    @Column({ nullable: true })
+    mapsUrl: string;
+
+    @Column({ unique: true })
+    @Index()
+    placeId: string;
+
+    @Column('decimal', { precision: 10, scale: 6, nullable: true })
+    latitude: number;
+
+    @Column('decimal', { precision: 10, scale: 6, nullable: true })
+    longitude: number;
+
+    @Column('jsonb', { nullable: true })
+    rating: {
+        average: number;
+        count: number;
+    };
+
+    @Column({ nullable: true })
+    phoneNumber: string;
+
+    @Column({ nullable: true })
+    website: string;
+
+    @Column({
+        type: 'enum',
+        enum: BusinessRole,
+    })
+    type: BusinessRole;
+
+    @Column({
+        type: 'enum',
+        enum: ProducerStatus,
+        default: ProducerStatus.PENDING,
+    })
+    status: ProducerStatus;
+
+    @Column({ default: true })
+    isActive: boolean;
+
+    @Column({ default: false })
+    isDeleted: boolean;
+
+    @Column({ nullable: true })
+    document1: string;
+
+    @Column({ nullable: true })
+    document2: string;
+
+    @OneToOne(() => User, { nullable: false, onDelete: 'CASCADE' })
+    @JoinColumn({ name: 'userId' })
+    user: User;
+
+    @OneToMany(() => Photo, photo => photo.producer)
+    photos: Photo[];
+
+    @OneToOne(() => AIAnalysis, analysis => analysis.producer)
+    aiAnalysis: AIAnalysis;
+
+    @OneToOne(() => GlobalRating, rating => rating.producer)
+    globalRating: GlobalRating;
+
+    @OneToOne(() => OpeningHours, hours => hours.producer)
+    openingHours: OpeningHours;
+
+    @CreateDateColumn()
+    createdAt: Date;
+
+    @UpdateDateColumn()
+    updatedAt: Date;
+}
