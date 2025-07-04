@@ -25,6 +25,7 @@ import OpeningHours from '../models/OpeningHours';
 import Producer from '../models/Producer';
 import Event from '../models/Event';
 import Photo from '../models/Photos';
+import EventBooking from '../models/EventBooking';
 
 export const UserRepository = PostgresDataSource.getRepository(User);
 export const RolesRepository = PostgresDataSource.getRepository(Roles);
@@ -52,3 +53,4 @@ export const OpeningHoursRepository = PostgresDataSource.getRepository(OpeningHo
 export const ProducerRepository = PostgresDataSource.getRepository(Producer);
 export const EventRepository = PostgresDataSource.getRepository(Event);
 export const PhotoRepository = PostgresDataSource.getRepository(Photo);
+export const EventBookingRepository = PostgresDataSource.getRepository(EventBooking);

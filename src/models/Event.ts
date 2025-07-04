@@ -8,6 +8,8 @@ import {
     UpdateDateColumn,
 } from 'typeorm';
 import Producer from './Producer';
+import { EventStatus } from '../enums/eventStatus.enum';
+import { ServiceType } from '../enums/serviceType.enum';
 
 @Entity('Events')
 export default class Event {
@@ -32,8 +34,8 @@ export default class Event {
     @Column({ nullable: true })
     location: string;
 
-    @Column({ nullable: true })
-    experienceType: string;
+    @Column({ type: 'enum', enum: ServiceType, nullable: true })
+    experienceType: ServiceType;
 
     @Column('decimal', { precision: 10, scale: 2, nullable: true })
     pricePerGuest: number;
@@ -43,6 +45,12 @@ export default class Event {
 
     @Column('text', { array: true, nullable: true })
     eventImages: string[];
+
+    @Column({ type: 'enum', enum: EventStatus, nullable: true })
+    status: EventStatus;
+
+    @Column({ nullable: true, unique: true })
+    slug: string;
 
     @ManyToOne(() => Producer, { onDelete: 'CASCADE' })
     @JoinColumn({ name: 'producerId' })

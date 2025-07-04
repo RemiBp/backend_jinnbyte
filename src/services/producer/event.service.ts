@@ -1,4 +1,5 @@
 import {
+    EventBookingRepository,
     EventRepository,
     ProducerRepository,
 } from '../../repositories';
@@ -6,6 +7,7 @@ import { BadRequestError } from '../../errors/badRequest.error';
 import { NotFoundError } from '../../errors/notFound.error';
 import { In, LessThan, MoreThan, Not } from 'typeorm';
 import { CreateEventInput } from '../../validators/producer/event.validation';
+import { EventStatus } from '../../enums/eventStatus.enum';
 
 export const createEvent = async (userId: number, data: CreateEventInput) => {
     const producer = await ProducerRepository.findOne({
@@ -31,18 +33,25 @@ export const createEvent = async (userId: number, data: CreateEventInput) => {
     };
 };
 
-export const getAllEvents = async (userId: number) => {
+export const getAllEvents = async (userId: number, status?: EventStatus) => {
     const producer = await ProducerRepository.findOne({
         where: { userId },
         relations: ['events'],
-        
     });
 
     if (!producer) {
         throw new NotFoundError('Producer not found');
     }
+    
+    if (status && !Object.values(EventStatus).includes(status)) {
+        throw new BadRequestError('Invalid event status');
+    }
 
-    return producer.events.filter((event: { isDeleted: any; }) => !event.isDeleted);
+    return producer.events.filter(
+        (event: { isDeleted: any; status: EventStatus; }) =>
+            !event.isDeleted &&
+            (status ? event.status === status : true)
+    );
 };
 
 export const getEventById = async (userId: number, eventId: number) => {
@@ -55,15 +64,27 @@ export const getEventById = async (userId: number, eventId: number) => {
         throw new NotFoundError('Producer not found');
     }
 
-    const event = producer.events.find((event: { id: number; isDeleted: any; }) => event.id === eventId && !event.isDeleted);
+    const event = producer.events.find(
+        (event: { id: number; isDeleted: any; }) => event.id === eventId && !event.isDeleted
+    );
 
     if (!event) {
         throw new NotFoundError('Event not found');
     }
 
-    return event;
-};
+    const totalParticipantsResult = await EventBookingRepository
+        .createQueryBuilder('booking')
+        .select('SUM(booking.numberOfPersons)', 'total')
+        .where('booking.eventId = :eventId AND booking.isCancelled = false', { eventId })
+        .getRawOne();
 
+    const totalParticipants = Number(totalParticipantsResult.total) || 0;
+
+    return {
+        ...event,
+        totalParticipants,
+    };
+};
 
 export const updateEvent = async (userId: number, eventId: number, data: Partial<CreateEventInput>) => {
     const producer = await ProducerRepository.findOne({

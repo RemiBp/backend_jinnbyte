@@ -1,6 +1,7 @@
 import { NextFunction, Request, Response } from 'express';
 import { createEventSchema } from '../../validators/producer/event.validation';
 import { EventService } from '../../services/producer/event.service';
+import { EventStatus } from '../../enums/eventStatus.enum';
 
 export const createEvent = async (req: Request, res: Response, next: NextFunction) => {
     try {
@@ -25,7 +26,9 @@ export const getAllEvents = async (req: Request, res: Response, next: NextFuncti
             throw new Error('userId is required');
         }
 
-        const events = await EventService.getAllEvents(userId);
+        const status = req.query.status as EventStatus | undefined;
+
+        const events = await EventService.getAllEvents(userId, status);
 
         res.status(200).json(events);
     } catch (error) {

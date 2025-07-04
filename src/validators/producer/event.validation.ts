@@ -1,9 +1,13 @@
 import { z } from 'zod';
+import { ServiceType } from '../../enums/serviceType.enum';
+import { EventStatus } from '../../enums/eventStatus.enum';
 
 export const createEventSchema = z.object({
     title: z.string().min(3, 'Event title is required'),
     description: z.string().optional(),
-    experienceType: z.string().min(1, 'Experience type is required'),
+    experienceType: z.nativeEnum(ServiceType, {
+        required_error: 'Experience type is required',
+    }),
     location: z.string().min(3, 'Location is required'),
     pricePerGuest: z.number().min(0),
     maxCapacity: z.number().int().positive(),
@@ -11,6 +15,9 @@ export const createEventSchema = z.object({
     startTime: z.string(),
     endTime: z.string(),
     eventImages: z.array(z.string()).max(9, 'Max 9 images allowed').optional(),
+    status: z.nativeEnum(EventStatus, {
+        required_error: 'Event status is required',
+    }),
 });
 
 export type CreateEventInput = z.infer<typeof createEventSchema>;
