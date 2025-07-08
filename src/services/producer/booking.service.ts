@@ -1,5 +1,7 @@
 import {
   BookingRepository,
+  EventBookingRepository,
+  EventRepository,
   NotificationRepository,
   RolesRepository,
   UserRepository,
@@ -11,6 +13,103 @@ import { NotificationTypeEnums } from '../../enums/notification.type.enum';
 import { NotificationStatusCode } from '../../enums/NotificationStatusCode.enum';
 import { getCurrentTimeInUTCFromTimeZone } from '../../utils/getTime';
 import { sendAdminNotification } from '../../utils/sendAdminNotification';
+import { UnauthorizedError } from '../../errors/unauthorized.error';
+
+export const createBooking = async (userId: number, eventId: number, data: { numberOfPersons: number }) => {
+  const event = await EventRepository.findOneBy({ id: eventId });
+  if (!event || event.isDeleted) throw new NotFoundError('Event not found');
+
+  const totalBooked = await EventBookingRepository
+    .createQueryBuilder('booking')
+    .select('SUM(booking.numberOfPersons)', 'sum')
+    .where('booking.eventId = :eventId AND booking.isCancelled = false', { eventId })
+    .getRawOne();
+
+  const currentCount = Number(totalBooked.sum) || 0;
+  if (event.maxCapacity && currentCount + data.numberOfPersons > event.maxCapacity) {
+    throw new BadRequestError('Booking exceeds event capacity');
+  }
+
+  const booking = EventBookingRepository.create({
+    user: { id: userId },
+    event: { id: eventId },
+    numberOfPersons: data.numberOfPersons,
+  });
+
+  await EventBookingRepository.save(booking);
+
+  return {
+    message: 'Booking confirmed',
+    totalAmount: data.numberOfPersons * Number(event.pricePerGuest),
+    bookingId: booking.id,
+  };
+};
+
+export const getBookingsByUser = async (userId: number) => {
+  return EventBookingRepository.find({
+    where: { user: { id: userId } },
+    relations: ['event'],
+    order: { createdAt: 'DESC' },
+  });
+};
+
+export const getBookingById = async (id: number, userId: number) => {
+  const booking = await EventBookingRepository.findOne({
+    where: { id },
+    relations: ['user', 'event'],
+  });
+
+  if (!booking) throw new NotFoundError('Booking not found');
+  if (booking.user.id !== userId) throw new UnauthorizedError('You do not have access to this booking');
+
+  return booking;
+};
+
+export const cancelBooking = async (bookingId: number, userId: number) => {
+  const booking = await EventBookingRepository.findOne({
+    where: { id: bookingId },
+    relations: ['user'],
+  });
+
+  if (!booking) throw new NotFoundError('Booking not found');
+  if (booking.user.id !== userId) throw new UnauthorizedError('Not your booking');
+
+  if (booking.isCancelled) {
+    throw new BadRequestError('Booking is already cancelled');
+  }
+
+  if (booking.isCheckedIn) {
+    throw new BadRequestError('Checked-in bookings cannot be cancelled');
+  }
+
+  booking.isCancelled = true;
+  await EventBookingRepository.save(booking);
+
+  return { message: 'Booking cancelled successfully' };
+};
+
+export const checkInBooking = async (id: number, userId: number) => {
+  const booking = await EventBookingRepository.findOne({
+    where: { id },
+    relations: ['user'],
+  });
+
+  if (!booking) throw new NotFoundError('Booking not found');
+  if (booking.user.id !== userId) throw new UnauthorizedError('Not your booking');
+
+  if (booking.isCancelled) {
+    throw new BadRequestError('Cancelled bookings cannot be checked-in');
+  }
+
+  if (booking.isCheckedIn) {
+    throw new BadRequestError('Already checked in');
+  }
+
+  booking.isCheckedIn = true;
+  await EventBookingRepository.save(booking);
+
+  return { message: 'Checked in successfully' };
+};
 
 export const getBookings = async (userId: number, booking: string, timeZone: string, page = 1, limit = 10) => {
   try {
@@ -42,25 +141,25 @@ export const getBookings = async (userId: number, booking: string, timeZone: str
     let canCheckIn = false;
     const nowIso = getCurrentTimeInUTCFromTimeZone(timeZone);
     const bookingsToUpdate = await BookingRepository.find({
-          where: {
-            restaurant: { id: user.id },
-            endDateTime: LessThan(nowIso),
-            status:  'scheduled'
-          },
-          order: { id: 'DESC' },
-          skip: (page - 1) * limit,
-          take: limit,
-        });
-        const bookingIdsToUpdate = bookingsToUpdate
-          .map((booking: { id: any }) => booking.id);
+      where: {
+        restaurant: { id: user.id },
+        endDateTime: LessThan(nowIso),
+        status: 'scheduled'
+      },
+      order: { id: 'DESC' },
+      skip: (page - 1) * limit,
+      take: limit,
+    });
+    const bookingIdsToUpdate = bookingsToUpdate
+      .map((booking: { id: any }) => booking.id);
 
-        if (bookingIdsToUpdate.length > 0) {
-          await BookingRepository.createQueryBuilder()
-            .update()
-            .set({ status: 'cancelled', cancelReason: 'Cancelled by system because its overdue and no action was taken' })
-            .whereInIds(bookingIdsToUpdate)
-            .execute();
-        }
+    if (bookingIdsToUpdate.length > 0) {
+      await BookingRepository.createQueryBuilder()
+        .update()
+        .set({ status: 'cancelled', cancelReason: 'Cancelled by system because its overdue and no action was taken' })
+        .whereInIds(bookingIdsToUpdate)
+        .execute();
+    }
 
     switch (booking) {
       case 'scheduled':
@@ -372,7 +471,7 @@ export const cancel = async (userId: number, bookingId: number, cancelReason: st
         notificationPayload,
       );
     }
-    
+
     return {
       booking: bookingResponse,
     };
@@ -472,10 +571,10 @@ export const checkIn = async (userId: number, bookingId: number, timeZone: strin
       };
 
       await sendAdminNotification(
-              booking.customer.deviceId,
-              "Customer Checked-in",
-              `${booking.customer.firstName} has checked-in the booking scheduled for ${convertBookingDateToDDMMYY}.`,
-              notificationPayload,
+        booking.customer.deviceId,
+        "Customer Checked-in",
+        `${booking.customer.firstName} has checked-in the booking scheduled for ${convertBookingDateToDDMMYY}.`,
+        notificationPayload,
       );
     }
     return {

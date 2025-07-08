@@ -23,6 +23,8 @@ import OperationalHour from './OperationalHours';
 import FavouriteRestaurant from './FavouriteRestaurant';
 import PaymentMethods from './PaymentMethods';
 import RestaurantPaymentMethods from './RestaurantPaymentMethods';
+import BusinessProfile from './BusinessProfile';
+import Producer from './Producer';
 
 @Entity('Users')
 export default class User {
@@ -36,22 +38,16 @@ export default class User {
   deviceId: string;
 
   @Column({ nullable: true })
-  firstName: string;
+  fullName: string;
 
   @Column({ nullable: true })
-  lastName: string;
+  userName: string;
 
   @Column({ nullable: true })
-  profilePicture: string;
-
-  @Column({ nullable: true })
-  about: string;
-
-  @Column()
   phoneNumber: string;
 
-  @Column({ nullable: true })
-  address: string;
+  @OneToOne(() => BusinessProfile, profile => profile.user, { cascade: true })
+  businessProfile: BusinessProfile;
 
   @Column({ default: false })
   isActive: boolean;
@@ -87,6 +83,9 @@ export default class User {
   })
   restaurant: Restaurant;
 
+  @OneToOne(() => Producer, producer => producer.user)
+  producer: Producer;
+
   @OneToOne(() => SocialLogin, socialLogin => socialLogin.user)
   socialLogin: SocialLogin;
 
@@ -99,7 +98,7 @@ export default class User {
   @OneToMany(() => FavouriteRestaurant, favourite => favourite.restaurant, { cascade: true })
   favouriteRestaurant: FavouriteRestaurant[];
 
-  @OneToMany (() => RestaurantPaymentMethods, paymentMethods => paymentMethods.user, { cascade: true })
+  @OneToMany(() => RestaurantPaymentMethods, paymentMethods => paymentMethods.user, { cascade: true })
   paymentMethods: RestaurantPaymentMethods[];
 
   @CreateDateColumn({ type: 'timestamptz', default: () => 'NOW()' })
