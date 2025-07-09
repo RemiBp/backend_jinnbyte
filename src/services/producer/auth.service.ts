@@ -9,6 +9,7 @@ import {
   UserRepository,
   BusinessProfileRepository,
   ProducerRepository,
+  AIAnalysisRepository,
 } from '../../repositories';
 import { sendOTPEmail } from '../mail.service';
 import { generateOTP } from '../../utils/generateOTP';
@@ -39,7 +40,7 @@ import { BusinessRole } from '../../enums/Producer.enum';
 import { ProducerStatus } from '../../enums/producerStatus.enum';
 import { getPresignedUploadUrl } from '../../utils/s3Service';
 import s3Service from '../s3.service';
-import { PreSignedURL } from '../../validators/producer/profile.validation';
+import { AiAnalysisSchema, PreSignedURL } from '../../validators/producer/profile.validation';
 
 export const createProducer = async (input: CreateProducer) => {
   const existing = await ProducerRepository.findOne({
@@ -60,6 +61,38 @@ export const createProducer = async (input: CreateProducer) => {
 
   return await ProducerRepository.save(producer);
 };
+
+export const createAIAnalysis = async (data: AiAnalysisSchema) => {
+  try {
+    const { producerId, ...scores } = data;
+
+    const producer = await ProducerRepository.findOneBy({ id: producerId });
+    if (!producer) throw new NotFoundError('Producer not found');
+
+    const averageScore = calculateAverageScore(scores);
+
+    const aiAnalysis = AIAnalysisRepository.create({
+      ...scores,
+      averageScore,
+      producer,
+    });
+
+    const saved = await AIAnalysisRepository.save(aiAnalysis);
+
+    return {
+      message: 'AI analysis created successfully',
+      data: saved,
+    };
+  } catch (error) {
+    console.error('Error in createAIAnalysis', { error });
+    throw error;
+  }
+};
+
+function calculateAverageScore(values: Record<string, number | undefined>) {
+  const scores = Object.values(values).filter((v): v is number => typeof v === 'number');
+  return scores.length ? parseFloat((scores.reduce((a, b) => a + b, 0) / scores.length).toFixed(2)) : 0;
+}
 
 export const register = async (signUpInput: SignUp) => {
   const queryRunner = PostgresDataSource.createQueryRunner();

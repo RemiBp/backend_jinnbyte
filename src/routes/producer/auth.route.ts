@@ -8,6 +8,8 @@ ProducerAuthRouter.get('/', (req, res) => {
 });
 
 ProducerAuthRouter.post('/createProducer', AuthController.createProducer);
+ProducerAuthRouter.post('/ai-analysis', AuthController.createAIAnalysis);
+
 
 ProducerAuthRouter.post('/register', AuthController.register);
 ProducerAuthRouter.post('/login', AuthController.login);

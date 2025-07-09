@@ -1,17 +1,36 @@
 import { z } from 'zod';
 
 export const userSignUpSchema = z.object({
-  fullName: z.string({ required_error: 'fullName is required' }).trim(),
-  userName: z.string({ required_error: 'userName is required' }).trim()
-    .min(3, 'userName must be at least 3 characters long')
-    .max(30, 'userName must be less than 30 characters')
-    .regex(/^[a-zA-Z0-9_]+$/, 'userName can only contain letters, numbers, and underscores'),
-  email: z.string({ required_error: 'Email is required' }).trim()
-    .email({ message: 'Invalid email' })
-    .transform(val => val.toLowerCase()),
-  password: z.string({ required_error: 'Password is required' }).trim()
-    .min(1, 'Password is required'),
-  phoneNumber: z.string({ required_error: 'Phone number is required' }).trim()
+  fullName: z
+    .string({ required_error: 'Full name is required' })
+    .trim()
+    .min(1, 'Full name is required'),
+
+  userName: z
+    .string({ required_error: 'Username is required' })
+    .trim()
+    .min(3, 'Username must be at least 3 characters long')
+    .max(30, 'Username must be less than 30 characters')
+    .regex(/^[a-zA-Z0-9_]+$/, 'Username can only contain letters, numbers, and underscores'),
+
+  email: z
+    .string({ required_error: 'Email is required' })
+    .trim()
+    .email({ message: 'Invalid email address' })
+    .transform((val) => val.toLowerCase()),
+
+  password: z
+    .string({ required_error: 'Password is required' })
+    .trim()
+    .min(8, { message: 'Password must be at least 8 characters long' })
+    .regex(/[A-Z]/, { message: 'Must include at least one uppercase letter' })
+    .regex(/[a-z]/, { message: 'Must include at least one lowercase letter' })
+    .regex(/[0-9]/, { message: 'Must include at least one number' })
+    .regex(/[^A-Za-z0-9]/, { message: 'Must include at least one special character' }),
+
+  phoneNumber: z
+    .string({ required_error: 'Phone number is required' })
+    .trim()
     .regex(/^\d{10}$/, 'Phone number must be exactly 10 digits'),
 });
 

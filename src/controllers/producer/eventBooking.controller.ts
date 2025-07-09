@@ -1,6 +1,6 @@
 import { NextFunction, Request, Response } from 'express';
 import { BookingService } from '../../services/producer/booking.service';
-import { bookingIdParamSchema, createBookingSchema } from '../../validators/producer/booking.validation';
+import { bookingIdParamSchema, createBookingSchema } from '../../validators/producer/eventBooking.validation';
 
 export const createBooking = async (req: Request, res: Response, next: NextFunction) => {
   try {
@@ -8,7 +8,6 @@ export const createBooking = async (req: Request, res: Response, next: NextFunct
     if (!userId) {
       throw new Error('userId is required');
     }
-    const eventId = Number(req.params.eventId);
     const data = createBookingSchema.parse(req.body);
 
     const bookingData = {
@@ -16,7 +15,7 @@ export const createBooking = async (req: Request, res: Response, next: NextFunct
       numberOfPersons: data.guestCount,
     };
 
-    const result = await BookingService.createBooking(userId, eventId, bookingData);
+    const result = await BookingService.createBooking(userId, data.eventId, bookingData);
     res.status(201).json(result);
   } catch (error) {
     next(error);
@@ -163,4 +162,4 @@ export const updateBookingTemp = async (req: Request, res: Response, next: NextF
   }
 };
 
-export * as BookingController from './booking.controller';
+export * as BookingController from './eventBooking.controller';

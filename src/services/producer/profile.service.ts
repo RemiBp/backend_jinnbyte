@@ -13,6 +13,7 @@ import {
   UploadRestaurantImagesSchema,
 } from '../../validators/producer/profile.validation';
 import {
+  AIAnalysisRepository,
   BookingRepository,
   BusinessProfileRepository,
   CuisineTypeRepository,
@@ -47,17 +48,7 @@ import { mapBusinessProfile, mapProducer } from '../../utils/profile.mapper';
 
 export const updateProfile = async (userId: number, updateProfileObject: UpdateProfileSchema) => {
   try {
-    const {
-      businessName,
-      address,
-      phoneNumber,
-      website,
-      instagram,
-      twitter,
-      facebook,
-      description,
-      profileImageUrl,
-    } = updateProfileObject;
+    const { businessName, address, phoneNumber, website, instagram, twitter, facebook, description, profileImageUrl } = updateProfileObject;
 
     const user = await UserRepository.findOne({
       where: { id: userId },
@@ -68,32 +59,23 @@ export const updateProfile = async (userId: number, updateProfileObject: UpdateP
       throw new NotFoundError('User not found');
     }
 
-    let profile = user.businessProfile;
+    const profile = user.businessProfile;
 
     if (!profile) {
-      profile = BusinessProfileRepository.create({
-        businessName,
-        address,
-        phoneNumber,
-        website,
-        instagram,
-        twitter,
-        facebook,
-        description,
-        profileImageUrl,
-        user,
-      });
-    } else {
-      profile.businessName = businessName;
-      profile.address = address;
-      profile.phoneNumber = phoneNumber;
-      profile.website = website;
-      profile.instagram = instagram;
-      profile.twitter = twitter;
-      profile.facebook = facebook;
-      profile.description = description;
-      profile.profileImageUrl = profileImageUrl ?? profile.profileImageUrl;
+      throw new BadRequestError('Business profile not found. Please complete onboarding first.');
     }
+
+    Object.assign(profile, {
+      businessName,
+      address,
+      phoneNumber,
+      website,
+      instagram,
+      twitter,
+      facebook,
+      description,
+      profileImageUrl: profileImageUrl ?? profile.profileImageUrl,
+    });
 
     user.phoneNumber = phoneNumber;
 
@@ -494,24 +476,29 @@ export const getOperationalDays = async (userId: number) => {
       };
     }
 
-    const operationalDays = [
-      { day: 'Monday', startTime: openingHours.mondayOpen, endTime: openingHours.mondayClose },
-      { day: 'Tuesday', startTime: openingHours.tuesdayOpen, endTime: openingHours.tuesdayClose },
-      { day: 'Wednesday', startTime: openingHours.wednesdayOpen, endTime: openingHours.wednesdayClose },
-      { day: 'Thursday', startTime: openingHours.thursdayOpen, endTime: openingHours.thursdayClose },
-      { day: 'Friday', startTime: openingHours.fridayOpen, endTime: openingHours.fridayClose },
-      { day: 'Saturday', startTime: openingHours.saturdayOpen, endTime: openingHours.saturdayClose },
-      { day: 'Sunday', startTime: openingHours.sundayOpen, endTime: openingHours.sundayClose },
-    ];
+    const operationalDays: { day: string; startTime: string | null; endTime: string | null }[] = [];
+
+    const daysOfWeek = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
+
+    for (const day of daysOfWeek) {
+      const dayKey = day.toLowerCase();
+      const startTime = openingHours[`${dayKey}Open` as keyof typeof openingHours];
+      const endTime = openingHours[`${dayKey}Close` as keyof typeof openingHours];
+
+      if (startTime && endTime) {
+        operationalDays.push({ day, startTime, endTime });
+      }
+    }
 
     return {
+      message: 'Operational days fetched successfully.',
       operationalDays,
     };
   } catch (error) {
     console.error('Error in getOperationalDays', { userId, error });
     throw error;
   }
-}
+};
 
 export const setCapacity = async (input: SetCapacitySchema & { userId: number }) => {
   const { userId, totalCapacity } = input;

@@ -10,7 +10,7 @@ import {
   getPresignedDocumentSchema,
   submitDocumentsSchema,
 } from '../../validators/producer/auth.validation';
-import { presignedURLSchema } from '../../validators/producer/profile.validation';
+import { aiAnalysisSchema, presignedURLSchema } from '../../validators/producer/profile.validation';
 
 export const createProducer = async (req: Request, res: Response, next: NextFunction) => {
   try {
@@ -21,6 +21,21 @@ export const createProducer = async (req: Request, res: Response, next: NextFunc
     next(error);
   }
 };
+
+export const createAIAnalysis = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const parsed = aiAnalysisSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json(parsed.error.format());
+    }
+
+    const result = await AuthService.createAIAnalysis(parsed.data);
+    res.status(200).json(result);
+  } catch (error) {
+    next(error);
+  }
+};
+
 
 export const register = async (req: Request, res: Response, next: NextFunction) => {
   try {

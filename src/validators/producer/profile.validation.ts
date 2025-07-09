@@ -2,6 +2,7 @@ import { profile } from 'console';
 import { z } from 'zod';
 import { deleteRestaurantImage } from '../../services/producer/profile.service';
 import { ServiceType } from '../../enums/serviceType.enum';
+import { UploadFolder } from '../../enums/uploadFolder.enum';
 
 export const uploadDocumentsSchema = z.object({
   userId: z.number({ required_error: 'userId is required' }),
@@ -15,31 +16,14 @@ export const uploadDocumentsSchema = z.object({
 
 export type UploadDocuments = z.infer<typeof uploadDocumentsSchema>;
 
-export const presignedURLSchema = z
-  .object({
-    fileName: z.string({ required_error: 'fileName is required' }),
-    contentType: z.string({ required_error: 'contentType is required' }),
-    folderName: z.enum(
-      ['GalleryImage', 'BusinessDocuments'],
-      {
-        required_error: 'folderName is required',
-      }
-    ),
-  })
-  .refine(
-    data => {
-      if (
-        data.folderName === 'BusinessDocuments'
-      ) {
-        return data.contentType === 'application/pdf';
-      }
-      return true;
-    },
-    {
-      message: 'contentType must be application/pdf for certificates and menu folders',
-      path: ['contentType'],
-    }
-  );
+export const presignedURLSchema = z.object({
+  fileName: z.string({ required_error: 'fileName is required' }),
+  contentType: z.string({ required_error: 'contentType is required' }),
+  folderName: z.nativeEnum(UploadFolder, {
+    required_error: 'folderName is required',
+    invalid_type_error: 'Invalid folder name',
+  }),
+});
 
 export type PreSignedURL = z.infer<typeof presignedURLSchema>;
 
@@ -112,6 +96,29 @@ export const setServiceTypeSchema = z.object({
 });
 
 export type SetServiceTypeInput = z.infer<typeof setServiceTypeSchema>;
+
+export const aiAnalysisSchema = z.object({
+  producerId: z.number(),
+  careQuality: z.number().optional(),
+  cleanliness: z.number().optional(),
+  welcome: z.number().optional(),
+  valueForMoney: z.number().optional(),
+  atmosphere: z.number().optional(),
+  staffExpertise: z.number().optional(),
+  expectationRespect: z.number().optional(),
+  advice: z.number().optional(),
+  productsUsed: z.number().optional(),
+  pricing: z.number().optional(),
+  punctuality: z.number().optional(),
+  precision: z.number().optional(),
+  hygiene: z.number().optional(),
+  creativity: z.number().optional(),
+  durability: z.number().optional(),
+  painExperience: z.number().optional(),
+  averageScore: z.number().optional(),
+});
+
+export type AiAnalysisSchema = z.infer<typeof aiAnalysisSchema>;
 
 export const setGalleryImagesSchema = z.object({
   images: z

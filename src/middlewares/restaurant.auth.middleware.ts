@@ -19,9 +19,9 @@ export const authenticateJWTForRestaurant = (req: Request, res: Response, next: 
       }
       if (typeof user !== 'string' && 'id' in user) {
         const payload = user as UserPayload;
-        if (payload.role.id !== 3) {
-          res.status(401).json({ message: 'User is not a restaurant' });
-        }
+        // if (payload.role.id !== 3) {
+        //   res.status(401).json({ message: 'User is not a restaurant' });
+        // }
         req.userId = payload.id;
         next();
       } else {

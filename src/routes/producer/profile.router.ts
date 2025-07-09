@@ -8,7 +8,7 @@ ProducerProfileRouter.get('/', (req, res) => {
 });
 
 ProducerProfileRouter.use(authenticateJWTForRestaurant);
-ProducerProfileRouter.use(checkStatus);
+// ProducerProfileRouter.use(checkStatus);
 
 ProducerProfileRouter.put('/updateProfile', ProfileController.updateProfile);
 ProducerProfileRouter.get('/getProfile', ProfileController.getProfile);
@@ -18,6 +18,7 @@ ProducerProfileRouter.post('/capacity', ProfileController.setCapacity);
 ProducerProfileRouter.post('/setServiceType', ProfileController.setServiceType);
 ProducerProfileRouter.post('/setGalleryImages', ProfileController.setGalleryImages);
 ProducerProfileRouter.get('/getGalleryImages', ProfileController.getGalleryImages);
+// ProducerProfileRouter.put('/ai-analysis/:id', ProfileController.createAIAnalysis);
 
 // ProducerProfileRouter.get('/getProfile', ProfileController.getProfile);
 ProducerProfileRouter.post('/getPreSignedUrl', ProfileController.getPreSignedUrl);
