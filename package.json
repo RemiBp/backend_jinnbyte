@@ -57,10 +57,11 @@
     "@types/cors": "^2.8.17",
     "@types/express": "^4.17.21",
     "@types/geojson": "^7946.0.14",
-    "@types/jsonwebtoken": "^9.0.5",
+    "@types/jsonwebtoken": "^9.0.10",
     "@types/jwk-to-pem": "^2.0.3",
     "@types/luxon": "^3.6.2",
     "@types/node": "^22.14.1",
+    "@types/socket.io": "^3.0.1",
     "ts-node": "^10.9.2",
     "typescript": "^5.6.3"
   }

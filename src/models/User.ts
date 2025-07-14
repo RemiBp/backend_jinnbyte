@@ -25,6 +25,9 @@ import PaymentMethods from './PaymentMethods';
 import RestaurantPaymentMethods from './RestaurantPaymentMethods';
 import BusinessProfile from './BusinessProfile';
 import Producer from './Producer';
+import Chat from './Chat';
+import Message from './Message';
+import ChatMember from './ChatMember';
 
 @Entity('Users')
 export default class User {
@@ -91,6 +94,15 @@ export default class User {
 
   @OneToMany(() => OperationalHour, hour => hour.user, { cascade: true })
   operationalHours: OperationalHour[];
+
+  @OneToMany(() => ChatMember, (chatMember) => chatMember.user)
+  chatMemberships: ChatMember[];
+
+  @OneToMany(() => Message, (message) => message.sender)
+  messages: Message[];
+
+  @OneToMany(() => Chat, (chat) => chat.creator)
+  createdChats: Chat[];
 
   @OneToMany(() => FavouriteRestaurant, favourite => favourite.user, { cascade: true })
   addFavourite: FavouriteRestaurant[];

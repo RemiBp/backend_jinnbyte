@@ -9,6 +9,7 @@ import {
   SetMainImageSchema,
   SetOperationHoursSchema,
   SetServiceTypeInput,
+  UpdateDocumentsInput,
   UpdateProfileSchema,
   UploadRestaurantImagesSchema,
 } from '../../validators/producer/profile.validation';
@@ -82,7 +83,10 @@ export const updateProfile = async (userId: number, updateProfileObject: UpdateP
     await BusinessProfileRepository.save(profile);
     await UserRepository.save(user);
 
-    return { message: 'Profile updated successfully' };
+    return {
+      ...profile,
+      phoneNumber: user.phoneNumber,
+    };
   } catch (error) {
     console.error('Error in updateProfile', { error });
     throw error;
@@ -107,7 +111,6 @@ export const getProfile = async (userId: number) => {
     producer: user.producer ? mapProducer(user.producer) : null,
   };
 };
-
 
 // export const getProfile = async (userId: number) => {
 //   try {
@@ -341,7 +344,7 @@ export const setServiceType = async (input: SetServiceTypeInput & { userId: numb
   await ProducerRepository.save(producer);
 
   return {
-    message: 'Service type updated successfully.',
+    serviceType,
   };
 };
 
@@ -365,6 +368,7 @@ export const setGalleryImages = async (userId: number, input: SetGalleryImages) 
   );
 
   await PhotoRepository.save(photos);
+  return { imageCount: photos.length };
 };
 
 export const getGalleryImages = async (userId: number) => {
@@ -448,7 +452,7 @@ export const setOperationalHours = async (input: SetOperationHoursSchema & { use
     await OpeningHoursRepository.save(openingHours);
 
     return {
-      message: 'Operational hours set successfully.',
+      ...openingHours,
     };
   } catch (error) {
     console.error('Error in setOperationalHours', { input, error });
@@ -491,7 +495,6 @@ export const getOperationalDays = async (userId: number) => {
     }
 
     return {
-      message: 'Operational days fetched successfully.',
       operationalDays,
     };
   } catch (error) {
@@ -513,7 +516,37 @@ export const setCapacity = async (input: SetCapacitySchema & { userId: number })
 
   await ProducerRepository.save(producer);
 
-  return { message: 'Capacity set successfully' };
+  return { totalCapacity };
+};
+
+export const updateDocuments = async (userId: number, input: UpdateDocumentsInput) => {
+  const user = await UserRepository.findOne({
+    where: { id: userId },
+    relations: ['producer'],
+  });
+
+  if (!user || !user.producer) {
+    throw new NotFoundError('Producer not found for this user');
+  }
+
+  const producer = user.producer;
+
+  if (input.document1) producer.document1 = input.document1;
+  if (input.document1Expiry) producer.document1Expiry = input.document1Expiry;
+
+  if (input.document2) producer.document2 = input.document2;
+  if (input.document2Expiry) producer.document2Expiry = input.document2Expiry;
+
+  const saved = await ProducerRepository.save(producer);
+  if (!saved) {
+    throw new BadRequestError('Failed to update documents');
+  }
+  return {
+    document1: saved.document1,
+    document1Expiry: saved.document1Expiry,
+    document2: saved.document2,
+    document2Expiry: saved.document2Expiry,
+  };
 };
 
 export const setSlotDuration = async (restaurantId: number, slotDuration: number) => {

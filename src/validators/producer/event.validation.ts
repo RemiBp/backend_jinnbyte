@@ -43,7 +43,9 @@ export const createEventSchema = z.object({
         .regex(/^\d{2}:\d{2}$/, 'End time must be in HH:mm format'),
 
     eventImages: z
-        .array(z.string().url('Each image must be a valid URL'))
+        .array(
+            z.string().min(1, 'Image path cannot be empty')
+        )
         .max(9, 'Max 9 images allowed')
         .optional(),
 

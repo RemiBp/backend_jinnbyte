@@ -167,3 +167,12 @@ export const reviewsAndRatingsSchema = z.object({
 });
 
 export type ReviewsAndRatingsSchema = z.infer<typeof reviewsAndRatingsSchema>;
+
+export const updateDocumentsSchema = z.object({
+  document1: z.string().optional(), // S3 key or URL
+  document1Expiry: z.string().datetime().optional(),
+  document2: z.string().optional(),
+  document2Expiry: z.string().datetime().optional(),
+});
+
+export type UpdateDocumentsInput = z.infer<typeof updateDocumentsSchema>;

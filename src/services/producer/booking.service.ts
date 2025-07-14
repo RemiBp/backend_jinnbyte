@@ -15,7 +15,7 @@ import { getCurrentTimeInUTCFromTimeZone } from '../../utils/getTime';
 import { sendAdminNotification } from '../../utils/sendAdminNotification';
 import { UnauthorizedError } from '../../errors/unauthorized.error';
 
-export const createBooking = async (userId: number, eventId: number, data: { numberOfPersons: number }) => {
+export const createBooking = async (userId: number, eventId: number, data: { numberOfPersons: number; internalNotes: string }) => {
   const event = await EventRepository.findOneBy({ id: eventId });
   if (!event || event.isDeleted) throw new NotFoundError('Event not found');
 
@@ -30,18 +30,26 @@ export const createBooking = async (userId: number, eventId: number, data: { num
     throw new BadRequestError('Booking exceeds event capacity');
   }
 
+  const totalPrice = Number(event.pricePerGuest) * data.numberOfPersons;
+
   const booking = EventBookingRepository.create({
     user: { id: userId },
     event: { id: eventId },
     numberOfPersons: data.numberOfPersons,
+    internalNotes: data.internalNotes ?? null,
+    totalPrice,
   });
 
   await EventBookingRepository.save(booking);
 
   return {
-    message: 'Booking confirmed',
-    totalAmount: data.numberOfPersons * Number(event.pricePerGuest),
-    bookingId: booking.id,
+    ...booking,
+    totalPrice,
+    event: {
+      id: event.id,
+      title: event.title,
+      pricePerGuest: event.pricePerGuest,
+    },
   };
 };
 
@@ -85,7 +93,7 @@ export const cancelBooking = async (bookingId: number, userId: number) => {
   booking.isCancelled = true;
   await EventBookingRepository.save(booking);
 
-  return { message: 'Booking cancelled successfully' };
+  return booking;
 };
 
 export const checkInBooking = async (id: number, userId: number) => {
@@ -108,7 +116,7 @@ export const checkInBooking = async (id: number, userId: number) => {
   booking.isCheckedIn = true;
   await EventBookingRepository.save(booking);
 
-  return { message: 'Checked in successfully' };
+  return booking;
 };
 
 export const getBookings = async (userId: number, booking: string, timeZone: string, page = 1, limit = 10) => {

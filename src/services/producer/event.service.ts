@@ -25,12 +25,9 @@ export const createEvent = async (userId: number, data: CreateEventInput) => {
         isDeleted: false,
     });
 
-    await EventRepository.save(newEvent);
+    const savedEvent = await EventRepository.save(newEvent);
 
-    return {
-        message: 'Event created successfully.',
-        eventId: newEvent.id,
-    };
+    return savedEvent;
 };
 
 export const getAllEvents = async (userId: number, status?: EventStatus) => {
@@ -42,7 +39,7 @@ export const getAllEvents = async (userId: number, status?: EventStatus) => {
     if (!producer) {
         throw new NotFoundError('Producer not found');
     }
-    
+
     if (status && !Object.values(EventStatus).includes(status)) {
         throw new BadRequestError('Invalid event status');
     }
@@ -103,12 +100,9 @@ export const updateEvent = async (userId: number, eventId: number, data: Partial
     }
 
     Object.assign(event, data);
-    await EventRepository.save(event);
+    const saved = await EventRepository.save(event);
 
-    return {
-        message: 'Event updated successfully.',
-        eventId: event.id,
-    };
+    return saved;
 };
 
 export const deleteEvent = async (userId: number, eventId: number) => {
@@ -128,12 +122,9 @@ export const deleteEvent = async (userId: number, eventId: number) => {
     }
 
     event.isDeleted = true;
-    await EventRepository.save(event);
+    const saved = await EventRepository.save(event);
 
-    return {
-        message: 'Event deleted successfully.',
-        eventId: event.id,
-    };
+    return saved;
 };
 
 export * as EventService from './event.service';

@@ -9,19 +9,22 @@ import {
   setMainImageSchema,
   setOperationHoursSchema,
   setServiceTypeSchema,
+  updateDocumentsSchema,
   updateProfileSchema,
   uploadDocumentsSchema,
   uploadRestaurantImagesSchema,
 } from '../../validators/producer/profile.validation';
 import { ProfileService } from '../../services/producer/profile.service';
-import { time } from 'console';
+import { sendApiResponse } from '../../utils/sendApiResponse';
 
 export const updateProfile = async (req: Request, res: Response, next: NextFunction) => {
   try {
     const validatedObject = updateProfileSchema.parse(req.body);
     const userId = Number(req.userId);
-    const response = await ProfileService.updateProfile(userId, validatedObject);
-    res.status(200).json(response);
+
+    const updatedProfile = await ProfileService.updateProfile(userId, validatedObject);
+
+    return sendApiResponse(res, 200, 'Profile updated successfully', updatedProfile);
   } catch (error) {
     next(error);
   }
@@ -30,8 +33,9 @@ export const updateProfile = async (req: Request, res: Response, next: NextFunct
 export const getProfile = async (req: Request, res: Response, next: NextFunction) => {
   try {
     const userId = Number(req.userId);
-    const response = await ProfileService.getProfile(userId);
-    res.status(200).json(response);
+    const profileData = await ProfileService.getProfile(userId);
+
+    return sendApiResponse(res, 200, 'Profile fetched successfully', profileData);
   } catch (error) {
     next(error);
   }
@@ -159,7 +163,7 @@ export const setServiceType = async (req: Request, res: Response, next: NextFunc
       serviceType,
     });
 
-    res.status(200).json(result);
+    return sendApiResponse(res, 200, 'Service type updated successfully.', { serviceType });
   } catch (err) {
     next(err);
   }
@@ -171,9 +175,11 @@ export const setGalleryImages = async (req: Request, res: Response, next: NextFu
     if (!userId) return res.status(401).json({ error: 'Unauthorized' });
 
     const validated = setGalleryImagesSchema.parse(req.body);
-    await ProfileService.setGalleryImages(userId, validated);
+    const { imageCount } = await ProfileService.setGalleryImages(userId, validated);
 
-    res.status(200).json({ message: 'Gallery images saved successfully' });
+    return sendApiResponse(res, 200, 'Gallery images saved successfully', {
+      imageCount,
+    });
   } catch (error) {
     next(error);
   }
@@ -187,7 +193,9 @@ export const getGalleryImages = async (req: Request, res: Response, next: NextFu
     }
 
     const images = await ProfileService.getGalleryImages(userId);
-    res.status(200).json({ images });
+    return sendApiResponse(res, 200, 'Gallery images fetched successfully', {
+      images,
+    });
   } catch (error) {
     next(error);
   }
@@ -204,7 +212,7 @@ export const setOperationalHours = async (req: Request, res: Response, next: Nex
       userId,
     });
 
-    res.status(200).json(response);
+    return sendApiResponse(res, 200, 'Operational hours set successfully.', response);
   } catch (error) {
     next(error);
   }
@@ -214,7 +222,7 @@ export const getOperationalDays = async (req: Request, res: Response, next: Next
   try {
     const userId = Number(req.userId);
     const response = await ProfileService.getOperationalDays(userId);
-    res.status(200).json(response);
+    return sendApiResponse(res, 200, 'Operational days fetched successfully.', response);
   } catch (error) {
     next(error);
   }
@@ -227,7 +235,21 @@ export const setCapacity = async (req: Request, res: Response, next: NextFunctio
 
     const response = await ProfileService.setCapacity({ userId, totalCapacity });
 
-    res.status(200).json(response);
+    return sendApiResponse(res, 200, 'Capacity set successfully', { totalCapacity });
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const updateDocuments = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const userId = Number(req.userId);
+    if (!userId) return res.status(401).json({ error: 'Unauthorized' });
+
+    const validated = updateDocumentsSchema.parse(req.body);
+    const updatedData = await ProfileService.updateDocuments(userId, validated);
+
+    return sendApiResponse(res, 200, 'Documents updated successfully', updatedData);
   } catch (error) {
     next(error);
   }

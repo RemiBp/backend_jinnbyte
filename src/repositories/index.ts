@@ -27,6 +27,9 @@ import Event from '../models/Event';
 import Photo from '../models/Photos';
 import EventBooking from '../models/EventBooking';
 import AIAnalysis from '../models/AIAnalysis';
+import Chat from '../models/Chat';
+import Message from '../models/Message';
+import ChatMember from '../models/ChatMember';
 
 export const UserRepository = PostgresDataSource.getRepository(User);
 export const RolesRepository = PostgresDataSource.getRepository(Roles);
@@ -56,3 +59,6 @@ export const EventRepository = PostgresDataSource.getRepository(Event);
 export const PhotoRepository = PostgresDataSource.getRepository(Photo);
 export const EventBookingRepository = PostgresDataSource.getRepository(EventBooking);
 export const AIAnalysisRepository = PostgresDataSource.getRepository(AIAnalysis);
+export const ChatRepository = PostgresDataSource.getRepository(Chat);
+export const MessageRepository = PostgresDataSource.getRepository(Message);
+export const ChatMemberRepository = PostgresDataSource.getRepository(ChatMember);

@@ -100,9 +100,6 @@ export const getPreSignedUrl = async (req: Request, res: Response, next: NextFun
 export const submitDocuments = async (req: Request, res: Response, next: NextFunction) => {
   try {
     const userId = Number(req.userId);
-    if (!userId) {
-      throw new Error('userId is required');
-    }
     if (!userId) return res.status(401).json({ error: 'Unauthorized' });
 
     const validated = submitDocumentsSchema.parse(req.body);

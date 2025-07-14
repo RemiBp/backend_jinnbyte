@@ -1,6 +1,7 @@
 import { NextFunction, Request, Response } from 'express';
 import { BookingService } from '../../services/producer/booking.service';
 import { bookingIdParamSchema, createBookingSchema } from '../../validators/producer/eventBooking.validation';
+import { sendApiResponse } from '../../utils/sendApiResponse';
 
 export const createBooking = async (req: Request, res: Response, next: NextFunction) => {
   try {
@@ -16,12 +17,11 @@ export const createBooking = async (req: Request, res: Response, next: NextFunct
     };
 
     const result = await BookingService.createBooking(userId, data.eventId, bookingData);
-    res.status(201).json(result);
+    return sendApiResponse(res, 201, 'Booking created successfully', result);
   } catch (error) {
     next(error);
   }
 };
-
 
 export const getUserBookings = async (req: Request, res: Response, next: NextFunction) => {
   try {
@@ -30,7 +30,7 @@ export const getUserBookings = async (req: Request, res: Response, next: NextFun
       throw new Error('userId is required');
     }
     const result = await BookingService.getBookingsByUser(userId);
-    res.status(200).json(result);
+    return sendApiResponse(res, 200, 'bookings fetched successfully', result);
   } catch (error) {
     next(error);
   }
@@ -45,12 +45,11 @@ export const getBookingById = async (req: Request, res: Response, next: NextFunc
     }
 
     const result = await BookingService.getBookingById(bookingId, userId);
-    res.status(200).json(result);
+    return sendApiResponse(res, 200, 'booking fetched successfully', result);
   } catch (error) {
     next(error);
   }
 };
-
 
 export const cancelBooking = async (req: Request, res: Response, next: NextFunction) => {
   try {
@@ -61,12 +60,11 @@ export const cancelBooking = async (req: Request, res: Response, next: NextFunct
     }
 
     const result = await BookingService.cancelBooking(bookingId, userId);
-    res.status(200).json(result);
+    return sendApiResponse(res, 200, 'Booking cancelled successfully', result);
   } catch (error) {
     next(error);
   }
 };
-
 
 export const checkIn = async (req: Request, res: Response, next: NextFunction) => {
   try {
@@ -76,7 +74,7 @@ export const checkIn = async (req: Request, res: Response, next: NextFunction) =
       throw new Error('userId is required');
     }
     const result = await BookingService.checkInBooking(bookingId, userId);
-    res.status(200).json(result);
+    return sendApiResponse(res, 200, 'Checked in successfully', result);
   } catch (error) {
     next(error);
   }
