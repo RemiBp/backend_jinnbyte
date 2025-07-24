@@ -25,6 +25,13 @@ import PaymentMethods from './PaymentMethods';
 import RestaurantPaymentMethods from './RestaurantPaymentMethods';
 import BusinessProfile from './BusinessProfile';
 import Producer from './Producer';
+import Post from './Post';
+import PostLike from './PostLike';
+import PostComment from './PostComment';
+import PostShare from './PostShare';
+import PostTag from './PostTag';
+import PostEmotion from './PostEmotion';
+import PostRating from './PostRating';
 
 @Entity('Users')
 export default class User {
@@ -100,6 +107,28 @@ export default class User {
 
   @OneToMany(() => RestaurantPaymentMethods, paymentMethods => paymentMethods.user, { cascade: true })
   paymentMethods: RestaurantPaymentMethods[];
+
+  // Social Module Relations
+  @OneToMany(() => Post, post => post.user, { cascade: true })
+  posts: Post[];
+
+  @OneToMany(() => PostLike, like => like.user, { cascade: true })
+  postLikes: PostLike[];
+
+  @OneToMany(() => PostComment, comment => comment.user, { cascade: true })
+  postComments: PostComment[];
+
+  @OneToMany(() => PostShare, share => share.user, { cascade: true })
+  postShares: PostShare[];
+
+  @OneToMany(() => PostTag, tag => tag.user, { cascade: true })
+  postTags: PostTag[];
+
+  @OneToMany(() => PostEmotion, emotion => emotion.user, { cascade: true })
+  postEmotions: PostEmotion[];
+
+  @OneToMany(() => PostRating, rating => rating.user, { cascade: true })
+  postRatings: PostRating[];
 
   @CreateDateColumn({ type: 'timestamptz', default: () => 'NOW()' })
   createdAt: Date;

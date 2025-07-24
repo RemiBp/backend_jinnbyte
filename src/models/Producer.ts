@@ -19,6 +19,7 @@ import { BusinessRole } from '../enums/Producer.enum';
 import { ProducerStatus } from '../enums/producerStatus.enum';
 import { ServiceType } from '../enums/serviceType.enum';
 import Event from './Event';
+import Post from './Post';
 
 @Entity('Producers')
 export default class Producer {
@@ -127,6 +128,10 @@ export default class Producer {
 
     @OneToMany(() => Event, event => event.producer)
     events: Event[];
+
+    // Social Module Relations
+    @OneToMany(() => Post, post => post.producer, { cascade: true })
+    posts: Post[];
 
     @CreateDateColumn()
     createdAt: Date;
