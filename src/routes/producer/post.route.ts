@@ -12,9 +12,10 @@ ProducerPostRouter.use(authenticateJWTForBooking);
 ProducerPostRouter.use(checkStatus);
 // ProducerPostRouter.use(checkPostCreationPermission);
 
-ProducerPostRouter.post('/createUserPost', checkPostCreationPermission, PostController.createUserPost);
 ProducerPostRouter.post('/createProducerPost', validatePostTypeByRole, PostController.createProducerPost);
-ProducerPostRouter.get('/getPosts', PostController.getPosts);
+ProducerPostRouter.get('/getPostsByProducer', PostController.getPostsByProducer);
+ProducerPostRouter.post('/createUserPost', checkPostCreationPermission, PostController.createUserPost);
+ProducerPostRouter.get('/getUserPosts', PostController.getPosts);
 ProducerPostRouter.get('/getPost/:postId', PostController.getPostById);
 ProducerPostRouter.put('/updatePost/:postId', PostController.updatePost);
 ProducerPostRouter.delete('/deletePost/:postId', PostController.deletePost);
@@ -24,9 +25,10 @@ ProducerPostRouter.post('/saveEmotions/:postId',checkPostCreationPermission , Po
 ProducerPostRouter.post('/togglePostLike/:postId', PostController.togglePostLike);
 ProducerPostRouter.post('/addCommentToPost/:postId', PostController.addCommentToPost);
 ProducerPostRouter.get('/getComments/:postId', PostController.getComments);
-ProducerPostRouter.post('/deleteComment/:commentId', PostController.deleteComment);
+ProducerPostRouter.delete('/deleteComment/:commentId', PostController.deleteComment);
 ProducerPostRouter.put('/editComment/:commentId', PostController.editComment);
 ProducerPostRouter.post('/sharePost/:postId', PostController.sharePost);
 ProducerPostRouter.get('/getPostStatistics/:postId', PostController.getPostStatistics);
+ProducerPostRouter.post('/toggleFollowProducer', PostController.toggleFollowProducer);
 
 export default ProducerPostRouter;

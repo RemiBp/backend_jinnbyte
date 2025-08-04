@@ -28,10 +28,23 @@ export const createProducerPost = async (req: Request, res: Response, next: Next
     }
 };
 
+export const getPostsByProducer = async (req: Request, res: Response, next: NextFunction) => {
+    try {
+        const userId = req.userId;
+        const roleName = req.roleName;
+
+        const posts = await PostService.getPostsByProducer(userId, roleName);
+        return sendApiResponse(res, 200, 'Posts by producer retrieved successfully.', posts);
+    } catch (error) {
+        next(error);
+    }
+};
+
 export const getPosts = async (req: Request, res: Response, next: NextFunction) => {
     try {
         const userId = req.userId;
         const roleName = req.roleName;
+
         const posts = await PostService.getPosts(userId, roleName);
         return sendApiResponse(res, 200, 'Posts retrieved successfully.', posts);
     } catch (error) {
@@ -54,9 +67,10 @@ export const getPostById = async (req: Request, res: Response, next: NextFunctio
 export const updatePost = async (req: Request, res: Response, next: NextFunction) => {
     try {
         const postId = req.params.id;
-        const parsed = updatePostSchema.safeParse({ ...req.body, postId });
+        const userId = req.userId;
 
-        const updatedPost = await PostService.updatePost(parsed.data);
+        const parsed = updatePostSchema.safeParse({ ...req.body, postId });
+        const updatedPost = await PostService.updatePost(userId, parsed.data);
         return sendApiResponse(res, 200, 'Post updated successfully', updatedPost);
     } catch (err) {
         next(err);
@@ -202,6 +216,18 @@ export const getPostStatistics = async (req: Request, res: Response, next: NextF
             postId,
             stats,
         });
+    } catch (error) {
+        next(error);
+    }
+};
+
+export const toggleFollowProducer = async (req: Request, res: Response, next: NextFunction) => {
+    try {
+        const userId = req.userId;
+        const { producerId, followedUserId } = req.body;
+
+        const result = await PostService.toggleFollow(userId, producerId, followedUserId);
+        return sendApiResponse(res, 200, result.message, result.data);
     } catch (error) {
         next(error);
     }
