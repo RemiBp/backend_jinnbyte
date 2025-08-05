@@ -32,6 +32,7 @@ import PostShare from './PostShare';
 import PostTag from './PostTag';
 import PostEmotion from './PostEmotion';
 import PostRating from './PostRating';
+import Follow from './Follow';
 
 @Entity('Users')
 export default class User {
@@ -67,6 +68,12 @@ export default class User {
 
   @Column({ default: false })
   isVerified: boolean;
+
+  @Column({ default: 0 })
+  followingCount: number;
+
+  @Column({ default: 0 })
+  followersCount: number;
 
   @ManyToOne(() => Roles, (role: Roles) => role.users)
   role: Roles;
@@ -129,6 +136,12 @@ export default class User {
 
   @OneToMany(() => PostRating, rating => rating.user, { cascade: true })
   postRatings: PostRating[];
+
+  @OneToMany(() => Follow, (follow) => follow.follower, { cascade: true })
+  follows: Follow[];
+
+  @OneToMany(() => Follow, (follow) => follow.followedUser)
+  followedByUsers: Follow[];
 
   @CreateDateColumn({ type: 'timestamptz', default: () => 'NOW()' })
   createdAt: Date;

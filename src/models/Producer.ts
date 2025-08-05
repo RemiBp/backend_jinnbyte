@@ -20,6 +20,7 @@ import { ProducerStatus } from '../enums/producerStatus.enum';
 import { ServiceType } from '../enums/serviceType.enum';
 import Event from './Event';
 import Post from './Post';
+import Follow from './Follow';
 
 @Entity('Producers')
 export default class Producer {
@@ -132,6 +133,9 @@ export default class Producer {
     // Social Module Relations
     @OneToMany(() => Post, post => post.producer, { cascade: true })
     posts: Post[];
+
+    @OneToMany(() => Follow, (follow) => follow.producer, { cascade: true })
+    followers: Follow[];
 
     @CreateDateColumn()
     createdAt: Date;
