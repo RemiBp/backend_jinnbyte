@@ -6,7 +6,7 @@ import {
   CreateDateColumn,
   UpdateDateColumn,
 } from "typeorm";
-import ServiceRating from "./ServiceRatings";
+import ProducerService from "./Services";
 
 @Entity("WellnessServiceTypes")
 export default class WellnessServiceType {
@@ -19,8 +19,8 @@ export default class WellnessServiceType {
   @Column("jsonb")
   criteria: string[];
 
-  @OneToMany(() => ServiceRating, (rating) => rating.serviceType)
-  ratings: ServiceRating[];
+  @OneToMany(() => ProducerService, (service) => service.serviceType)
+  services: ProducerService[];
 
   @CreateDateColumn()
   createdAt: Date;

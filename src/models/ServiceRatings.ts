@@ -9,7 +9,6 @@ import {
 } from "typeorm";
 import Post from "./Post";
 import User from "./User";
-import WellnessServiceType from "./WellnessServiceTypes";
 import ProducerService from "./Services";
 
 @Entity("ServiceRatings")
@@ -24,7 +23,7 @@ export default class ServiceRating {
   userId: number;
 
   @Column()
-  serviceTypeId: number;
+  producerServiceId: number;
 
   @ManyToOne(() => Post, (post) => post.serviceRatings, { onDelete: "CASCADE" })
   @JoinColumn({ name: "postId" })
@@ -34,13 +33,12 @@ export default class ServiceRating {
   @JoinColumn({ name: "userId" })
   user: User;
 
-  @ManyToOne(() => WellnessServiceType, (serviceType) => serviceType.ratings, {
+  @ManyToOne(() => ProducerService, (service) => service.ratings, {
     onDelete: "CASCADE",
   })
-  @JoinColumn({ name: "serviceTypeId" })
-  serviceType: WellnessServiceType;
+  @JoinColumn({ name: "producerServiceId" })
+  producerService: ProducerService;
 
-  // --- Actual rating values ---
   @Column("jsonb")
   ratings: Record<string, number>;
 

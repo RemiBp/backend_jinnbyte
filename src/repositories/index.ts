@@ -46,7 +46,6 @@ import WellnessPostRating from '../models/WellnessPostRating';
 import RestaurantPostRating from '../models/RestaurantPostRating';
 import ProducerServiceType from '../models/Services';
 import ServiceRating from '../models/ServiceRatings';
-import ServiceRatingCriteria from '../models/WellnessServiceTypes'
 import EventRating from '../models/EventRating';
 import EventType from '../models/EventTypes';
 import WellnessServiceType from '../models/WellnessServiceTypes';
@@ -91,7 +90,6 @@ export const PostStatisticsRepository = PostgresDataSource.getRepository(PostSta
 export const FollowRepository = PostgresDataSource.getRepository(Follow);
 export const ProducerServiceRepository = PostgresDataSource.getRepository(ProducerServiceType);
 export const ServiceRatingRepository = PostgresDataSource.getRepository(ServiceRating);
-export const ServiceRatingCriteriaRepository = PostgresDataSource.getRepository(ServiceRatingCriteria);
 export const EventRatingRepository = PostgresDataSource.getRepository(EventRating);
 export const EventTypeRepository = PostgresDataSource.getRepository(EventType);
 export const ServiceTypeRepository = PostgresDataSource.getRepository(WellnessServiceType);

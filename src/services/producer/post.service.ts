@@ -23,7 +23,6 @@ import {
     EventRepository,
     LeisureRepository,
     WellnessRepository,
-    ServiceRatingCriteriaRepository,
     TagRepository,
 } from '../../repositories';
 import { CreateEmotionInput, CreatePostInput, CreateProducerPostInput, CreateRatingInput, EmotionSchema } from '../../validators/producer/post.validation';
@@ -38,7 +37,6 @@ import { FollowStatusEnums } from '../../enums/followStatus.enum';
 import { LeisureRatingCriteria, RestaurantRatingCriteria, WellnessRatingCriteria } from '../../enums/rating.enum';
 import { EntityManager, ILike } from 'typeorm';
 import ServiceRating from '../../models/ServiceRatings';
-import ServiceRatingCriteria from '../../models/WellnessServiceTypes';
 import ProducerService from '../../models/Services';
 import WellnessServiceType from '../../models/WellnessServiceTypes';
 
@@ -83,7 +81,7 @@ export const createUserPost = async (userId: number, data: CreatePostInput) => {
     }
 
     const producer = await ProducerRepository.findOne({
-        where: { placeId: data.placeId, isDeleted: false, isActive: true },
+        where: { id: data.placeId, isDeleted: false, isActive: true },
     });
     if (!producer) {
         throw new NotFoundError("Producer not found for the given placeId");
@@ -464,24 +462,24 @@ async function updateGlobalRating(
 export const createServiceRatings = async (input: {
     userId: number;
     postId: number;
-    ratings: { serviceTypeId: number; ratings: Record<string, number> }[];
+    ratings: { producerServiceId: number; ratings: Record<string, number> }[];
 }) => {
     const { userId, postId, ratings } = input;
 
     await AppDataSource.transaction(async (manager: EntityManager) => {
         for (const r of ratings) {
-            const serviceType = await manager.getRepository(WellnessServiceType).findOne({
-                where: { id: r.serviceTypeId },
+            const service = await manager.getRepository(ProducerService).findOne({
+                where: { id: r.producerServiceId, isDeleted: false },
             });
 
-            if (!serviceType) {
-                throw new NotFoundError(`ServiceType ${r.serviceTypeId} not found`);
+            if (!service) {
+                throw new NotFoundError(`ProducerService ${r.producerServiceId} not found`);
             }
 
             await manager.getRepository(ServiceRating).save({
                 userId,
                 postId,
-                serviceTypeId: r.serviceTypeId,
+                producerServiceId: r.producerServiceId,
                 ratings: r.ratings,
             });
         }

@@ -2,15 +2,16 @@ import {
   Entity,
   PrimaryGeneratedColumn,
   Column,
+  ManyToOne,
+  JoinColumn,
   CreateDateColumn,
   UpdateDateColumn,
-  ManyToOne,
   OneToMany,
-  JoinColumn,
 } from "typeorm";
 import ServiceRating from "./ServiceRatings";
 import Wellness from "./Wellness";
 import WellnessServiceType from "./WellnessServiceTypes";
+import Producer from "./Producer";
 
 @Entity("ProducerServices")
 export default class ProducerService {
@@ -18,23 +19,59 @@ export default class ProducerService {
   id: number;
 
   @Column()
-  wellnessId: number;
+  title: string;
+
+  @Column({ nullable: true })
+  description: string;
+
+  @Column({ nullable: true })
+  duration: string;
+
+  @Column({ nullable: true })
+  location: string;
+
+  @Column("decimal", { precision: 10, scale: 2, nullable: true })
+  price: number;
+
+  @Column({ nullable: true })
+  maxCapacity: number;
+
+  @Column("text", { array: true, nullable: true })
+  serviceImages: string[];
+
+  @Column({ nullable: true, unique: true })
+  slug: string;
+
+  @OneToMany(() => ServiceRating, (rating) => rating.producerService, { cascade: true })
+  ratings: ServiceRating[];
 
   @ManyToOne(() => Wellness, (wellness) => wellness.services, { onDelete: "CASCADE" })
   @JoinColumn({ name: "wellnessId" })
   wellness: Wellness;
 
   @Column()
-  serviceTypeId: number;
+  wellnessId: number;
 
-  @ManyToOne(() => WellnessServiceType, { eager: true })
+  @ManyToOne(() => WellnessServiceType, (type) => type.services, { onDelete: "SET NULL" })
   @JoinColumn({ name: "serviceTypeId" })
   serviceType: WellnessServiceType;
 
-  @CreateDateColumn()
+  @Column({ nullable: true })
+  serviceTypeId: number;
+
+  @ManyToOne(() => Producer, { onDelete: "CASCADE" })
+  @JoinColumn({ name: "producerId" })
+  producer: Producer;
+
+  @Column({ default: true })
+  isActive: boolean;
+
+  @Column({ default: false })
+  isDeleted: boolean;
+
+  @CreateDateColumn({ type: "timestamptz", default: () => "NOW()" })
   createdAt: Date;
 
-  @UpdateDateColumn()
+  @UpdateDateColumn({ type: "timestamptz", default: () => "NOW()", onUpdate: "NOW()" })
   updatedAt: Date;
 }
-
