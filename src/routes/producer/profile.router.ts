@@ -1,16 +1,17 @@
 import { Router } from 'express';
 import { ProfileController } from '../../controllers/producer/profile.controller';
-import { authenticateJWT, checkStatus } from '../../middlewares/auth.middleware';
+import { authenticateBothJWT, authenticateJWT, checkStatus } from '../../middlewares/auth.middleware';
 
 const ProducerProfileRouter = Router();
 ProducerProfileRouter.get('/', (req, res) => {
   res.send('Hit Restaurant profile route');
 });
 
+ProducerProfileRouter.get('/getAllServiceType', authenticateBothJWT, ProfileController.getAllServiceType);
+
 ProducerProfileRouter.use(authenticateJWT);
 ProducerProfileRouter.use(checkStatus);
 
-ProducerProfileRouter.get('/getAllServiceType', ProfileController.getAllServiceType);
 ProducerProfileRouter.put('/updateProfile', ProfileController.updateProfile);
 ProducerProfileRouter.get('/getProfile', ProfileController.getProfile);
 ProducerProfileRouter.post('/setOperationalHours', ProfileController.setOperationalHours);

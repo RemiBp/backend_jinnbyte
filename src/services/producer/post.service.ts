@@ -127,10 +127,7 @@ export const createUserPost = async (userId: number, data: CreatePostInput) => {
         await PostImageRepository.save(images);
     }
 
-    return {
-        message: "Post created successfully",
-        post,
-    };
+    return post;
 };
 
 export const createProducerPost = async (userId: number, roleName: string, data: CreateProducerPostInput) => {
