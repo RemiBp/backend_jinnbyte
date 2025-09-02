@@ -130,6 +130,91 @@ export const CreateRatingSchema = z.union([
 
 export type CreateRatingInput = z.infer<typeof CreateRatingSchema>;
 
+export const singleDishRatingSchema = z.object({
+  dishId: z.number({
+    required_error: "dishId is required",
+    invalid_type_error: "dishId must be a number",
+  }),
+  rating: z
+    .number({
+      required_error: "rating is required",
+      invalid_type_error: "rating must be a number",
+    })
+    .min(1, { message: "Rating must be at least 1" })
+    .max(5, { message: "Rating must be at most 5" }),
+});
+
+export const createDishRatingsSchema = z.object({
+  postId: z.number({
+    required_error: "postId is required",
+    invalid_type_error: "postId must be a number",
+  }),
+  ratings: z
+    .array(singleDishRatingSchema, {
+      required_error: "ratings are required",
+      invalid_type_error: "ratings must be an array",
+    })
+    .min(1, { message: "At least one dish rating is required" }),
+});
+
+export type CreateDishRatingsInput = z.infer<typeof createDishRatingsSchema>;
+
+export const CreateServiceRatingsSchema = z.object({
+  postId: z.number({
+    required_error: "postId is required",
+    invalid_type_error: "postId must be a number",
+  }),
+  serviceTypeId: z.number({
+    required_error: "serviceTypeId is required",
+    invalid_type_error: "serviceTypeId must be a number",
+  }),
+  ratings: z.array(
+    z.object({
+      criteria: z.string({
+        required_error: "criteria is required",
+        invalid_type_error: "criteria must be a string",
+      }),
+      rating: z.number({
+        required_error: "rating is required",
+        invalid_type_error: "rating must be a number",
+      })
+        .min(0, { message: "rating must be greater than or equal to 0" })
+        .max(5, { message: "rating must be less than or equal to 5" }),
+    })
+  ).min(1, { message: "At least one rating is required" }),
+});
+
+export type CreateServiceRatingsInput = z.infer<typeof CreateServiceRatingsSchema>;
+
+export const CreateEventRatingsSchema = z.object({
+  postId: z.number({
+    required_error: "postId is required",
+    invalid_type_error: "postId must be a number",
+  }).int({ message: "postId must be an integer" }),
+
+  eventId: z.number({
+    required_error: "eventId is required",
+    invalid_type_error: "eventId must be a number",
+  }).int({ message: "eventId must be an integer" }),
+
+  ratings: z.array(
+    z.object({
+      criteria: z.string({
+        required_error: "criteria is required",
+        invalid_type_error: "criteria must be a string",
+      }),
+      rating: z.number({
+        required_error: "rating is required",
+        invalid_type_error: "rating must be a number",
+      })
+        .min(0, { message: "rating must be greater than or equal to 0" })
+        .max(5, { message: "rating must be less than or equal to 5" }),
+    })
+  ).min(1, { message: "At least one rating is required" }),
+});
+
+export type CreateEventRatingsInput = z.infer<typeof CreateEventRatingsSchema>;
+
 export const EmotionSchema = z.object({
   emotions: z.array(z.nativeEnum(EmotionType)).min(1, "At least one emotion is required"),
 });

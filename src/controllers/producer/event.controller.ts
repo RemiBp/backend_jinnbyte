@@ -1,5 +1,5 @@
 import { NextFunction, Request, Response } from 'express';
-import { createEventSchema } from '../../validators/producer/event.validation';
+import { createEventSchema, GetAllEventsSchema } from '../../validators/producer/event.validation';
 import { EventService } from '../../services/producer/event.service';
 import { EventStatus } from '../../enums/eventStatus.enum';
 import { sendApiResponse } from '../../utils/sendApiResponse';
@@ -25,12 +25,24 @@ export const createEvent = async (req: Request, res: Response, next: NextFunctio
     }
 };
 
+export const getMyEvents = async (req: Request, res: Response, next: NextFunction) => {
+    try {
+        const userId = req.userId!;
+        const status = req.query.status as EventStatus;
+
+        const events = await EventService.getMyEvents(userId, status);
+        return sendApiResponse(res, 200, "Producer events fetched successfully", events);
+    } catch (error) {
+        next(error);
+    }
+};
+
 export const getAllEvents = async (req: Request, res: Response, next: NextFunction) => {
     try {
-        const userId = req.userId;
-        const status = req.query.status as EventStatus | undefined;
+        const parsed = GetAllEventsSchema.parse(req.query);
 
-        const events = await EventService.getAllEvents(userId, status);
+        const events = await EventService.getAllEvents(parsed);
+
         return sendApiResponse(res, 200, "Events fetched successfully", events);
     } catch (error) {
         next(error);

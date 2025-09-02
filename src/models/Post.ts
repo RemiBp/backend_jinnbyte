@@ -16,6 +16,7 @@ import Producer from './Producer';
 import { PostType, PostStatus } from '../enums/post.enum';
 import ServiceRating from './ServiceRatings';
 import EventRating from './EventRating';
+import DishRating from './DishRating';
 
 @Entity('Posts')
 export default class Post {
@@ -102,6 +103,9 @@ export default class Post {
 
     @OneToOne('PostStatistics', 'post', { cascade: true })
     statistics: any;
+
+    @OneToMany(() => DishRating, (rating) => rating.post, { cascade: true })
+    dishRatings: DishRating[];
 
     @CreateDateColumn({ type: 'timestamptz' })
     createdAt: Date;

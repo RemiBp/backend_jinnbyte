@@ -41,6 +41,12 @@ export default class Event {
     @Column({ nullable: true })
     location: string;
 
+    @Column("decimal", { precision: 9, scale: 6, nullable: true })
+    latitude: number;
+
+    @Column("decimal", { precision: 9, scale: 6, nullable: true })
+    longitude: number;
+
     @Column({ type: 'enum', enum: ServiceType, nullable: true })
     serviceType: ServiceType;
 

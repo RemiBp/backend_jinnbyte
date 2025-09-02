@@ -4,10 +4,11 @@ import {
     EventTypeRepository,
     LeisureRepository,
     ProducerRepository,
+    UserRepository,
 } from '../../repositories';
 import { BadRequestError } from '../../errors/badRequest.error';
 import { NotFoundError } from '../../errors/notFound.error';
-import { CreateEventInput } from '../../validators/producer/event.validation';
+import { CreateEventInput, GetAllEventsInput } from '../../validators/producer/event.validation';
 import { EventStatus } from '../../enums/eventStatus.enum';
 
 export const getEventTypes = async () => {
@@ -62,14 +63,11 @@ export const createEvent = async (userId: number, data: CreateEventInput) => {
     return newEvent;
 };
 
-export const getAllEvents = async (userId: number, status?: EventStatus) => {
+export const getMyEvents = async (userId: number, status?: EventStatus) => {
     const producer = await ProducerRepository.findOne({ where: { userId } });
     if (!producer) throw new NotFoundError("Producer not found");
 
-    const whereClause: any = {
-        producer: { id: producer.id },
-    };
-
+    const whereClause: any = { producer: { id: producer.id } };
     if (status) whereClause.status = status;
 
     return EventRepository.find({
@@ -78,14 +76,64 @@ export const getAllEvents = async (userId: number, status?: EventStatus) => {
     });
 };
 
-export const getEventById = async (userId: number, eventId: number) => {
-    const producer = await ProducerRepository.findOne({ where: { userId } });
-    if (!producer) throw new NotFoundError("Producer not found");
+export const getAllEvents = async ({ status, category, location }: GetAllEventsInput) => {
+    const qb = EventRepository.createQueryBuilder("event")
+        .leftJoinAndSelect("event.producer", "producer")
+        .leftJoinAndSelect("event.leisure", "leisure")
+        .leftJoinAndSelect("event.eventType", "eventType");
 
-    const event = await EventRepository.findOne({
-        where: { id: eventId, producer: { id: producer.id }, isDeleted: false },
-        relations: ["producer", "leisure", "eventType"],
+    if (status) qb.andWhere("event.status = :status", { status });
+    if (category) qb.andWhere("event.category = :category", { category });
+
+    if (location) {
+        qb.andWhere(
+            `
+    (
+      6371 * acos(
+        cos(radians(:lat)) * cos(radians(producer.latitude)) *
+        cos(radians(producer.longitude) - radians(:lng)) +
+        sin(radians(:lat)) * sin(radians(producer.latitude))
+      )
+    ) <= :radius
+    `,
+            {
+                lat: location.lat,
+                lng: location.lng,
+                radius: location.radius,
+            }
+        );
+    }
+
+    return qb.getMany();
+};
+
+export const getEventById = async (userId: number, eventId: number) => {
+
+    const user = await UserRepository.findOne({
+        where: { id: userId, isDeleted: false },
+        relations: ["role"],
     });
+    if (!user) throw new NotFoundError("User not found");
+
+    let event;
+
+    // 2. If normal user → see any public active event
+    if (user.role.name === "user") {
+        event = await EventRepository.findOne({
+            where: { id: eventId },
+            relations: ["producer", "leisure", "eventType"],
+        });
+    }
+    // 3. If producer → only their own event
+    else if (["restaurant", "leisure"].includes(user.role.name)) {
+        const producer = await ProducerRepository.findOne({ where: { userId } });
+        if (!producer) throw new NotFoundError("Producer not found");
+
+        event = await EventRepository.findOne({
+            where: { id: eventId, producer: { id: producer.id } },
+            relations: ["producer", "leisure", "eventType"],
+        });
+    }
 
     if (!event) throw new NotFoundError("Event not found");
 

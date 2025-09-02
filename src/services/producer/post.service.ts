@@ -24,8 +24,12 @@ import {
     LeisureRepository,
     WellnessRepository,
     TagRepository,
+    DishRatingRepository,
+    MenuDishesRepository,
+    WellnessServiceTypeRepository,
+    WellnessServiceRepository,
 } from '../../repositories';
-import { CreateEmotionInput, CreatePostInput, CreateProducerPostInput, CreateRatingInput, EmotionSchema } from '../../validators/producer/post.validation';
+import { CreateDishRatingsInput, CreateEmotionInput, CreateEventRatingsInput, CreatePostInput, CreateProducerPostInput, CreateRatingInput, CreateServiceRatingsInput, EmotionSchema } from '../../validators/producer/post.validation';
 import AppDataSource from '../../data-source';
 import z from 'zod';
 import Follow from '../../models/Follow';
@@ -59,15 +63,7 @@ export const searchProducers = async (query: string, type: string) => {
         take: 10,
     });
 
-    return {
-        results: producers.map((p: { id: any; placeId: any; name: any; address: any; city: any; country: any; }) => ({
-            id: p.id,
-            name: p.name,
-            address: p.address,
-            city: p.city,
-            country: p.country,
-        })),
-    };
+    return producers;
 };
 
 export const createUserPost = async (userId: number, data: CreatePostInput) => {
@@ -492,66 +488,142 @@ async function updateGlobalRating(
         .execute();
 }
 
-export const createServiceRatings = async (input: {
-    userId: number;
-    postId: number;
-    ratings: { producerServiceId: number; ratings: Record<string, number> }[];
-}) => {
-    const { userId, postId, ratings } = input;
+// export const createServiceRatings = async (input: {
+//     userId: number;
+//     postId: number;
+//     ratings: { producerServiceId: number; ratings: Record<string, number> }[];
+// }) => {
+//     const { userId, postId, ratings } = input;
 
-    await AppDataSource.transaction(async (manager: EntityManager) => {
-        for (const r of ratings) {
-            const service = await manager.getRepository(ProducerService).findOne({
-                where: { id: r.producerServiceId, isDeleted: false },
-            });
+//     await AppDataSource.transaction(async (manager: EntityManager) => {
+//         for (const r of ratings) {
+//             const service = await manager.getRepository(ProducerService).findOne({
+//                 where: { id: r.producerServiceId },
+//             });
 
-            if (!service) {
-                throw new NotFoundError(`ProducerService ${r.producerServiceId} not found`);
-            }
+//             if (!service) {
+//                 throw new NotFoundError(`ProducerService ${r.producerServiceId} not found`);
+//             }
 
-            await manager.getRepository(ServiceRating).save({
-                userId,
-                postId,
-                producerServiceId: r.producerServiceId,
-                ratings: r.ratings,
-            });
-        }
+//             await manager.getRepository(ServiceRating).save({
+//                 userId,
+//                 postId,
+//                 producerServiceId: r.producerServiceId,
+//                 ratings: r.ratings,
+//             });
+//         }
+//     });
+
+//     return { message: "Service ratings added successfully." };
+// };
+
+export const createServiceRatings = async (
+    input: CreateServiceRatingsInput & { userId: number }
+) => {
+    const { userId, postId, serviceTypeId, ratings } = input;
+
+    const post = await PostRepository.findOne({
+        where: { id: postId },
+        relations: ["producer"],
+    });
+    if (!post) throw new NotFoundError("Post not found");
+
+    const wellness = await WellnessRepository.findOne({
+        where: { producerId: post.producer.id },
+    });
+    if (!wellness) {
+        throw new NotFoundError("Producer wellness profile not found");
+    }
+
+    // 3. Find the matching service under this wellness
+    const producerService = await WellnessServiceRepository.findOne({
+        where: {
+            wellnessId: wellness.id,
+            serviceTypeId,
+        },
+        relations: ["serviceType"],
+    });
+    if (!producerService) {
+        throw new NotFoundError("Producer does not have this service type");
+    }
+
+    // 4. Validate rating criteria
+    const allowedCriteria = producerService.serviceType.criteria;
+    const invalidKeys = Object.keys(ratings).filter(
+        (k) => !allowedCriteria.includes(k)
+    );
+    if (invalidKeys.length > 0) {
+        throw new BadRequestError(
+            `Invalid rating fields: ${invalidKeys.join(", ")}`
+        );
+    }
+
+    const entity = await ServiceRatingRepository.save({
+        userId,
+        postId,
+        producerServiceId: producerService.id,
+        serviceTypeId,
+        ratings,
     });
 
-    return { message: "Service ratings added successfully." };
+    return entity;
 };
 
-export const createEventRatings = async (input: {
-    userId: number;
-    postId: number;
-    eventId: number;
-    ratings: { criteria: string; rating: number }[];
-}) => {
+
+export const createDishRatings = async (userId: number, input: CreateDishRatingsInput) => {
+    const { postId, ratings } = input;
+
+    const post = await PostRepository.findOne({ where: { id: postId } });
+    if (!post) throw new NotFoundError("Post not found");
+
+    const entities = [];
+
+    for (const r of ratings) {
+        const dish = await MenuDishesRepository.findOne({ where: { id: r.dishId } });
+        if (!dish) throw new NotFoundError(`Dish with id ${r.dishId} not found`);
+
+        entities.push(
+            DishRatingRepository.create({
+                userId,
+                postId,
+                dishId: r.dishId,
+                rating: r.rating,
+            })
+        );
+    }
+
+    return await DishRatingRepository.save(entities);
+};
+
+export const getDishRatings = async (dishId: number) => {
+    return DishRatingRepository.find({
+        where: { dishId },
+        relations: ["user"],
+    });
+};
+
+export const createEventRatings = async (input: CreateEventRatingsInput & { userId: number }) => {
     const { userId, postId, eventId, ratings } = input;
 
     const event = await EventRepository.findOne({
-        where: { id: eventId, isDeleted: false },
+        where: { id: eventId },
         relations: ["eventType"],
     });
-    if (!event) {
-        throw new NotFoundError("Event not found or already deleted");
-    }
+    if (!event) throw new NotFoundError("Event not found or already deleted");
 
     const post = await PostRepository.findOne({
         where: { id: postId, isDeleted: false },
     });
-    if (!post) {
-        throw new NotFoundError("Post not found or already deleted");
-    }
+    if (!post) throw new NotFoundError("Post not found or already deleted");
 
     if (!event.eventType) {
         throw new BadRequestError("Event type not configured for this event");
     }
-    const allowedCriteria = new Set(event.eventType.criteria);
 
+    const allowedCriteria = new Set(event.eventType.criteria);
     const invalidCriteria = ratings
-        .map(r => r.criteria)
-        .filter(c => !allowedCriteria.has(c));
+        .map((r) => r.criteria)
+        .filter((c) => !allowedCriteria.has(c));
 
     if (invalidCriteria.length > 0) {
         throw new BadRequestError(`Invalid criteria: ${invalidCriteria.join(", ")}`);
@@ -562,13 +634,13 @@ export const createEventRatings = async (input: {
     });
     const existingCriteria = new Set(existingRatings.map((r: { criteria: any; }) => r.criteria));
 
-    const newRatings = ratings.filter(r => !existingCriteria.has(r.criteria));
+    const newRatings = ratings.filter((r) => !existingCriteria.has(r.criteria));
     if (newRatings.length === 0) {
         throw new BadRequestError("You already rated this event with given criteria");
     }
 
     const ratingEntities = EventRatingRepository.create(
-        newRatings.map(r => ({
+        newRatings.map((r) => ({
             userId,
             postId,
             eventId,
@@ -580,17 +652,18 @@ export const createEventRatings = async (input: {
 
     const allRatings = await EventRatingRepository.find({ where: { eventId } });
     const avg =
-        allRatings.reduce((sum: number, r: { rating: any; }) => sum + Number(r.rating), 0) / allRatings.length;
+        allRatings.reduce((sum: number, r: { rating: any; }) => sum + Number(r.rating), 0) /
+        allRatings.length;
 
     post.overallAvgRating = avg;
     await PostRepository.save(post);
 
     return {
-        message: "Event ratings added successfully.",
         ratings: ratingEntities,
         overallAvgRating: avg,
     };
 };
+
 
 export const saveEmotions = async (userId: number, postId: number, data: CreateEmotionInput) => {
     const post = await PostRepository.findOneBy({ id: postId, isDeleted: false });
@@ -765,7 +838,7 @@ export const addCommentToPost = async (userId: number, postId: number, comment: 
 
     const stats = await PostStatisticsRepository.findOneBy({ postId });
 
-    const newComment = PostCommentRepository.save({
+    const newComment = await PostCommentRepository.save({
         userId,
         postId,
         comment: comment.trim(),
@@ -781,7 +854,7 @@ export const addCommentToPost = async (userId: number, postId: number, comment: 
     ]);
 
     return {
-        commentId: newComment,
+        comment: newComment,
         totalComments: post.commentCount,
     };
 };

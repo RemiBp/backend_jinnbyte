@@ -53,6 +53,7 @@ import WellnessService from '../models/WellnessServices';
 import MenuCategory from '../models/MenuCategory';
 import MenuDishes from '../models/MenuDishes';
 import ProducerDocument from '../models/ProducerDocument';
+import DishRating from '../models/DishRating';
 
 export const UserRepository = PostgresDataSource.getRepository(User);
 export const RolesRepository = PostgresDataSource.getRepository(Roles);
@@ -108,3 +109,4 @@ export const WellnessPostRatingRepository = PostgresDataSource.getRepository(Wel
 export const RestaurantPostRatingRepository = PostgresDataSource.getRepository(RestaurantPostRating);
 export const MenuCategoryRepository = PostgresDataSource.getRepository(MenuCategory);
 export const MenuDishesRepository = PostgresDataSource.getRepository(MenuDishes);
+export const DishRatingRepository = PostgresDataSource.getRepository(DishRating);

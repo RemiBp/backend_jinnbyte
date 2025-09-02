@@ -35,6 +35,7 @@ import PostRating from './PostRating';
 import Follow from './Follow';
 import ServiceRating from './ServiceRatings';
 import EventRating from './EventRating';
+import DishRating from './DishRating';
 
 @Entity('Users')
 export default class User {
@@ -128,6 +129,9 @@ export default class User {
 
   @OneToMany(() => FavouriteRestaurant, favourite => favourite.restaurant, { cascade: true })
   favouriteRestaurant: FavouriteRestaurant[];
+
+  @OneToMany(() => DishRating, (rating) => rating.user, { cascade: true })
+  dishRatings: DishRating[];
 
   @OneToMany(() => RestaurantPaymentMethods, paymentMethods => paymentMethods.user, { cascade: true })
   paymentMethods: RestaurantPaymentMethods[];

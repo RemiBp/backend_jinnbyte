@@ -1,5 +1,5 @@
 import { Request, Response, NextFunction } from 'express';
-import { createPostSchema, createProducerPostSchema, CreateRatingSchema, EmotionSchema, toggleFollowSchema, updatePostSchema } from '../../validators/producer/post.validation';
+import { createDishRatingsSchema, CreateEventRatingsSchema, createPostSchema, createProducerPostSchema, CreateRatingSchema, CreateServiceRatingsSchema, EmotionSchema, toggleFollowSchema, updatePostSchema } from '../../validators/producer/post.validation';
 import { PostService } from '../../services/producer/post.service';
 import { sendApiResponse } from '../../utils/sendApiResponse';
 import { BadRequestError } from '../../errors/badRequest.error';
@@ -138,36 +138,54 @@ export const saveRatings = async (req: Request, res: Response, next: NextFunctio
 export const createServiceRatings = async (req: Request, res: Response, next: NextFunction) => {
     try {
         const userId = req.userId;
-        const postId = Number(req.params.postId);
-        const { ratings } = req.body;
+        const validated = CreateServiceRatingsSchema.parse(req.body);
 
         const result = await PostService.createServiceRatings({
-            userId: Number(userId),
-            postId,
-            ratings,
+            userId,
+            postId: validated.postId,
+            serviceTypeId: validated.serviceTypeId,
+            ratings: validated.ratings,
         });
 
-        res.status(201).json(result);
+        return sendApiResponse(res, 201, "Services ratings saved successfully", result);
     } catch (err) {
         next(err);
     }
 };
 
-export const createEventRatings = async (req: Request, res: Response, next: NextFunction) => {
+export const createDishRatings = async (req: Request, res: Response, next: NextFunction) => {
     try {
         const userId = req.userId;
-        const postId = Number(req.params.postId);
+        const validatedData = createDishRatingsSchema.parse(req.body);
 
-        const { eventId, ratings } = req.body;
+        const result = await PostService.createDishRatings(userId, validatedData);
+
+        return sendApiResponse(res, 201, "Dish ratings saved successfully", result);
+    } catch (error) {
+        next(error);
+    }
+};
+
+export const getDishRatings = async (req: Request, res: Response, next: NextFunction) => {
+    try {
+        const dishId = Number(req.params.dishId);
+        const result = await PostService.getDishRatings(dishId);
+        return sendApiResponse(res, 200, "Dish ratings fetched successfully", result);
+    } catch (error) {
+        next(error);
+    }
+};
+
+export const createEventRatings = async (req: Request,res: Response,next: NextFunction) => {
+    try {
+        const userId = req.userId;
+        const validated = CreateEventRatingsSchema.parse(req.body);
 
         const result = await PostService.createEventRatings({
             userId,
-            postId,
-            eventId: Number(eventId),
-            ratings,
+            ...validated,
         });
-
-        res.status(201).json(result);
+        return sendApiResponse(res, 200, "Events ratings fetched successfully", result);
     } catch (err) {
         next(err);
     }
