@@ -35,6 +35,10 @@ import PostRating from './PostRating';
 import Follow from './Follow';
 import ServiceRating from './ServiceRatings';
 import EventRating from './EventRating';
+import DishRating from './DishRating';
+import ChatMember from './ChatMember';
+import Message from './Message';
+import Chat from './Chat';
 
 @Entity('Users')
 export default class User {
@@ -95,6 +99,15 @@ export default class User {
   @OneToMany(() => EventRating, rating => rating.user)
   eventRatings: EventRating[];
 
+   @OneToMany(() => ChatMember, (chatMember) => chatMember.user)
+  chatMemberships: ChatMember[];
+
+  @OneToMany(() => Message, (message) => message.sender)
+  messages: Message[];
+
+  @OneToMany(() => Chat, (chat) => chat.creator)
+  createdChats: Chat[];
+
   @OneToOne(() => Password, password => password.user, { cascade: true })
   Password: Password;
 
@@ -128,6 +141,9 @@ export default class User {
 
   @OneToMany(() => FavouriteRestaurant, favourite => favourite.restaurant, { cascade: true })
   favouriteRestaurant: FavouriteRestaurant[];
+
+  @OneToMany(() => DishRating, (rating) => rating.user, { cascade: true })
+  dishRatings: DishRating[];
 
   @OneToMany(() => RestaurantPaymentMethods, paymentMethods => paymentMethods.user, { cascade: true })
   paymentMethods: RestaurantPaymentMethods[];

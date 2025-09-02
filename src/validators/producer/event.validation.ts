@@ -49,3 +49,35 @@ export const deleteEventSchema = z.object({
 });
 
 export type DeleteEventInput = z.infer<typeof deleteEventSchema>;
+
+export const GetAllEventsSchema = z
+    .object({
+        status: z.nativeEnum(EventStatus).optional(),
+        category: z.string().optional(),
+        lat: z.coerce.number().optional(),
+        lng: z.coerce.number().optional(),
+        radius: z.coerce.number().positive().optional(),
+    })
+    .transform((data) => {
+        // Build location object if all are present
+        const hasLocation = data.lat !== undefined && data.lng !== undefined && data.radius !== undefined;
+
+        return {
+            status: data.status,
+            category: data.category,
+            location: hasLocation
+                ? { lat: data.lat!, lng: data.lng!, radius: data.radius! }
+                : undefined,
+        };
+    })
+    .refine(
+        (data) =>
+            (data.location && data.location.lat && data.location.lng && data.location.radius) ||
+            (!data.location),
+        {
+            message: "lat, lng and radius must be provided together",
+            path: ["location"],
+        }
+    );
+
+export type GetAllEventsInput = z.infer<typeof GetAllEventsSchema>;

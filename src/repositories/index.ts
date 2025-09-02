@@ -38,6 +38,11 @@ import PostShare from '../models/PostShare';
 import PostStatistics from '../models/PostStatistics';
 import Follow from '../models/Follow';
 
+
+import Chat from '../models/Chat';
+import Message from '../models/Message';
+import ChatMember from '../models/ChatMember';
+
 import Leisure from '../models/Leisure';
 import Wellness from '../models/Wellness';
 import RestaurantRating from '../models/RestaurantRating';
@@ -52,6 +57,8 @@ import WellnessServiceType from '../models/WellnessServiceTypes';
 import WellnessService from '../models/WellnessServices';
 import MenuCategory from '../models/MenuCategory';
 import MenuDishes from '../models/MenuDishes';
+import ProducerDocument from '../models/ProducerDocument';
+import DishRating from '../models/DishRating';
 
 export const UserRepository = PostgresDataSource.getRepository(User);
 export const RolesRepository = PostgresDataSource.getRepository(Roles);
@@ -77,6 +84,7 @@ export const UnavailableSlotRepository = PostgresDataSource.getRepository(Unavai
 export const BusinessProfileRepository = PostgresDataSource.getRepository(BusinessProfile);
 export const OpeningHoursRepository = PostgresDataSource.getRepository(OpeningHours);
 export const ProducerRepository = PostgresDataSource.getRepository(Producer);
+export const ProducerDocumentRepository = PostgresDataSource.getRepository(ProducerDocument);
 export const EventRepository = PostgresDataSource.getRepository(Event);
 export const PhotoRepository = PostgresDataSource.getRepository(Photo);
 export const EventBookingRepository = PostgresDataSource.getRepository(EventBooking);
@@ -98,6 +106,10 @@ export const EventTypeRepository = PostgresDataSource.getRepository(EventType);
 export const WellnessServiceTypeRepository = PostgresDataSource.getRepository(WellnessServiceType);
 export const WellnessServiceRepository = PostgresDataSource.getRepository(WellnessService);
 
+export const ChatRepository = PostgresDataSource.getRepository(Chat);
+export const MessageRepository = PostgresDataSource.getRepository(Message);
+export const ChatMemberRepository = PostgresDataSource.getRepository(ChatMember);
+
 export const LeisureRepository = PostgresDataSource.getRepository(Leisure);
 export const WellnessRepository = PostgresDataSource.getRepository(Wellness);
 export const RestaurantRatingRepository = PostgresDataSource.getRepository(RestaurantRating);
@@ -106,3 +118,4 @@ export const WellnessPostRatingRepository = PostgresDataSource.getRepository(Wel
 export const RestaurantPostRatingRepository = PostgresDataSource.getRepository(RestaurantPostRating);
 export const MenuCategoryRepository = PostgresDataSource.getRepository(MenuCategory);
 export const MenuDishesRepository = PostgresDataSource.getRepository(MenuDishes);
+export const DishRatingRepository = PostgresDataSource.getRepository(DishRating);

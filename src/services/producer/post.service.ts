@@ -24,8 +24,12 @@ import {
     LeisureRepository,
     WellnessRepository,
     TagRepository,
+    DishRatingRepository,
+    MenuDishesRepository,
+    WellnessServiceTypeRepository,
+    WellnessServiceRepository,
 } from '../../repositories';
-import { CreateEmotionInput, CreatePostInput, CreateProducerPostInput, CreateRatingInput, EmotionSchema } from '../../validators/producer/post.validation';
+import { CreateDishRatingsInput, CreateEmotionInput, CreateEventRatingsInput, CreatePostInput, CreateProducerPostInput, CreateRatingInput, CreateServiceRatingsInput, EmotionSchema } from '../../validators/producer/post.validation';
 import AppDataSource from '../../data-source';
 import z from 'zod';
 import Follow from '../../models/Follow';
@@ -59,15 +63,7 @@ export const searchProducers = async (query: string, type: string) => {
         take: 10,
     });
 
-    return {
-        results: producers.map((p: { id: any; placeId: any; name: any; address: any; city: any; country: any; }) => ({
-            id: p.id,
-            name: p.name,
-            address: p.address,
-            city: p.city,
-            country: p.country,
-        })),
-    };
+    return producers;
 };
 
 export const createUserPost = async (userId: number, data: CreatePostInput) => {
@@ -127,10 +123,7 @@ export const createUserPost = async (userId: number, data: CreatePostInput) => {
         await PostImageRepository.save(images);
     }
 
-    return {
-        message: "Post created successfully",
-        post,
-    };
+    return post;
 };
 
 export const createProducerPost = async (userId: number, roleName: string, data: CreateProducerPostInput) => {
@@ -325,35 +318,71 @@ export const saveRatings = async (
     const type = post.type || post.producer.type;
     if (!type) throw new BadRequestError("Post type not found");
 
-    let repo: any, globalRepo: any, allowedFields: string[], extraField: Record<string, number> = {};
+    let repo: any,
+        globalRepo: any,
+        allowedFields: string[],
+        entityId: number = 0,
+        extraField: Record<string, number> = {};
 
     switch (type) {
-        case BusinessRole.RESTAURANT:
+        case BusinessRole.RESTAURANT: {
+            const restaurant = await RestaurantRatingRepository.findOne({
+                where: { producerId: post.producer.id },
+            });
+            if (!restaurant) {
+                throw new BadRequestError(
+                    `Restaurant profile not found for producerId=${post.producer.id}`
+                );
+            }
+
             repo = RestaurantPostRatingRepository;
             globalRepo = RestaurantRatingRepository;
             allowedFields = Object.values(RestaurantRatingCriteria) as string[];
-            extraField = { restaurantId: post.producer.id };
+            entityId = restaurant.id;
+            extraField = { restaurantId: entityId };
             break;
+        }
 
-        case BusinessRole.LEISURE:
+        case BusinessRole.LEISURE: {
+            const leisure = await LeisureRepository.findOne({
+                where: { producerId: post.producer.id },
+            });
+            if (!leisure) {
+                throw new BadRequestError(
+                    `Leisure profile not found for producerId=${post.producer.id}`
+                );
+            }
+
             repo = LeisurePostRatingRepository;
             globalRepo = LeisureRepository;
             allowedFields = Object.values(LeisureRatingCriteria) as string[];
-            extraField = { leisureId: post.producer.id };
+            entityId = leisure.id;
+            extraField = { leisureId: entityId };
             break;
+        }
 
-        case BusinessRole.WELLNESS:
+        case BusinessRole.WELLNESS: {
+            const wellness = await WellnessRepository.findOne({
+                where: { producerId: post.producer.id },
+            });
+            if (!wellness) {
+                throw new BadRequestError(
+                    `Wellness profile not found for producerId=${post.producer.id}`
+                );
+            }
+
             repo = WellnessPostRatingRepository;
             globalRepo = WellnessRepository;
             allowedFields = Object.values(WellnessRatingCriteria) as string[];
-            extraField = { wellnessId: post.producer.id };
+            entityId = wellness.id ?? 0;
+            extraField = { wellnessId: entityId };
             break;
+        }
 
         default:
             throw new BadRequestError("Invalid post type");
     }
 
-    // ✅ Validate criteria keys
     const invalidKeys = Object.keys(ratings).filter(
         (key) => !allowedFields.includes(key)
     );
@@ -363,7 +392,6 @@ export const saveRatings = async (
         );
     }
 
-    // ✅ Save or update rating
     const existing = await repo.findOne({ where: { userId, postId } });
     let savedRating;
     if (existing) {
@@ -379,8 +407,9 @@ export const saveRatings = async (
         });
     }
 
-    // ✅ Update global after saving
-    await updateGlobalRating(type, postId, post.producer.id, globalRepo, savedRating);
+    if (entityId) {
+        await updateGlobalRating(type, postId, entityId, globalRepo, savedRating);
+    }
 
     return {
         postId,
@@ -392,7 +421,7 @@ export const saveRatings = async (
 async function updateGlobalRating(
     type: BusinessRole,
     postId: number,
-    producerId: number,
+    entityId: number,
     globalRepo: any,
     newRating?: any
 ) {
@@ -418,10 +447,10 @@ async function updateGlobalRating(
             return;
     }
 
-    let ratings = await postRepo.find({ where: { postId } });
+    const ratings = await postRepo.find({ where: { postId } });
 
     // 👇 Ensure freshly saved rating is included
-    if (newRating && !ratings.find((r: { id: any; }) => r.id === newRating.id)) {
+    if (newRating && !ratings.find((r: { id: any }) => r.id === newRating.id)) {
         ratings.push(newRating);
     }
 
@@ -447,7 +476,7 @@ async function updateGlobalRating(
         ).toFixed(1)
     );
 
-    // ✅ Update correct global table
+    // ✅ Update correct global table with sub-entity id
     await globalRepo
         .createQueryBuilder()
         .update()
@@ -455,70 +484,146 @@ async function updateGlobalRating(
             ...averages,
             overall,
         })
-        .where("id = :id", { id: producerId })
+        .where("id = :id", { id: entityId })
         .execute();
 }
 
-export const createServiceRatings = async (input: {
-    userId: number;
-    postId: number;
-    ratings: { producerServiceId: number; ratings: Record<string, number> }[];
-}) => {
-    const { userId, postId, ratings } = input;
+// export const createServiceRatings = async (input: {
+//     userId: number;
+//     postId: number;
+//     ratings: { producerServiceId: number; ratings: Record<string, number> }[];
+// }) => {
+//     const { userId, postId, ratings } = input;
 
-    await AppDataSource.transaction(async (manager: EntityManager) => {
-        for (const r of ratings) {
-            const service = await manager.getRepository(ProducerService).findOne({
-                where: { id: r.producerServiceId, isDeleted: false },
-            });
+//     await AppDataSource.transaction(async (manager: EntityManager) => {
+//         for (const r of ratings) {
+//             const service = await manager.getRepository(ProducerService).findOne({
+//                 where: { id: r.producerServiceId },
+//             });
 
-            if (!service) {
-                throw new NotFoundError(`ProducerService ${r.producerServiceId} not found`);
-            }
+//             if (!service) {
+//                 throw new NotFoundError(`ProducerService ${r.producerServiceId} not found`);
+//             }
 
-            await manager.getRepository(ServiceRating).save({
-                userId,
-                postId,
-                producerServiceId: r.producerServiceId,
-                ratings: r.ratings,
-            });
-        }
+//             await manager.getRepository(ServiceRating).save({
+//                 userId,
+//                 postId,
+//                 producerServiceId: r.producerServiceId,
+//                 ratings: r.ratings,
+//             });
+//         }
+//     });
+
+//     return { message: "Service ratings added successfully." };
+// };
+
+export const createServiceRatings = async (
+    input: CreateServiceRatingsInput & { userId: number }
+) => {
+    const { userId, postId, serviceTypeId, ratings } = input;
+
+    const post = await PostRepository.findOne({
+        where: { id: postId },
+        relations: ["producer"],
+    });
+    if (!post) throw new NotFoundError("Post not found");
+
+    const wellness = await WellnessRepository.findOne({
+        where: { producerId: post.producer.id },
+    });
+    if (!wellness) {
+        throw new NotFoundError("Producer wellness profile not found");
+    }
+
+    // 3. Find the matching service under this wellness
+    const producerService = await WellnessServiceRepository.findOne({
+        where: {
+            wellnessId: wellness.id,
+            serviceTypeId,
+        },
+        relations: ["serviceType"],
+    });
+    if (!producerService) {
+        throw new NotFoundError("Producer does not have this service type");
+    }
+
+    // 4. Validate rating criteria
+    const allowedCriteria = producerService.serviceType.criteria;
+    const invalidKeys = Object.keys(ratings).filter(
+        (k) => !allowedCriteria.includes(k)
+    );
+    if (invalidKeys.length > 0) {
+        throw new BadRequestError(
+            `Invalid rating fields: ${invalidKeys.join(", ")}`
+        );
+    }
+
+    const entity = await ServiceRatingRepository.save({
+        userId,
+        postId,
+        producerServiceId: producerService.id,
+        serviceTypeId,
+        ratings,
     });
 
-    return { message: "Service ratings added successfully." };
+    return entity;
 };
 
-export const createEventRatings = async (input: {
-    userId: number;
-    postId: number;
-    eventId: number;
-    ratings: { criteria: string; rating: number }[];
-}) => {
+
+export const createDishRatings = async (userId: number, input: CreateDishRatingsInput) => {
+    const { postId, ratings } = input;
+
+    const post = await PostRepository.findOne({ where: { id: postId } });
+    if (!post) throw new NotFoundError("Post not found");
+
+    const entities = [];
+
+    for (const r of ratings) {
+        const dish = await MenuDishesRepository.findOne({ where: { id: r.dishId } });
+        if (!dish) throw new NotFoundError(`Dish with id ${r.dishId} not found`);
+
+        entities.push(
+            DishRatingRepository.create({
+                userId,
+                postId,
+                dishId: r.dishId,
+                rating: r.rating,
+            })
+        );
+    }
+
+    return await DishRatingRepository.save(entities);
+};
+
+export const getDishRatings = async (dishId: number) => {
+    return DishRatingRepository.find({
+        where: { dishId },
+        relations: ["user"],
+    });
+};
+
+export const createEventRatings = async (input: CreateEventRatingsInput & { userId: number }) => {
     const { userId, postId, eventId, ratings } = input;
 
     const event = await EventRepository.findOne({
-        where: { id: eventId, isDeleted: false },
+        where: { id: eventId },
         relations: ["eventType"],
     });
-    if (!event) {
-        throw new NotFoundError("Event not found or already deleted");
-    }
+    if (!event) throw new NotFoundError("Event not found or already deleted");
 
     const post = await PostRepository.findOne({
         where: { id: postId, isDeleted: false },
     });
-    if (!post) {
-        throw new NotFoundError("Post not found or already deleted");
-    }
+    if (!post) throw new NotFoundError("Post not found or already deleted");
 
     if (!event.eventType) {
         throw new BadRequestError("Event type not configured for this event");
     }
-    const allowedCriteria = new Set(event.eventType.criteria);
 
+    const allowedCriteria = new Set(event.eventType.criteria);
     const invalidCriteria = ratings
-        .map(r => r.criteria)
-        .filter(c => !allowedCriteria.has(c));
+        .map((r) => r.criteria)
+        .filter((c) => !allowedCriteria.has(c));
 
     if (invalidCriteria.length > 0) {
         throw new BadRequestError(`Invalid criteria: ${invalidCriteria.join(", ")}`);
@@ -529,13 +634,13 @@ export const createEventRatings = async (input: {
     });
     const existingCriteria = new Set(existingRatings.map((r: { criteria: any; }) => r.criteria));
 
-    const newRatings = ratings.filter(r => !existingCriteria.has(r.criteria));
+    const newRatings = ratings.filter((r) => !existingCriteria.has(r.criteria));
     if (newRatings.length === 0) {
         throw new BadRequestError("You already rated this event with given criteria");
     }
 
     const ratingEntities = EventRatingRepository.create(
-        newRatings.map(r => ({
+        newRatings.map((r) => ({
             userId,
             postId,
             eventId,
@@ -547,17 +652,18 @@ export const createEventRatings = async (input: {
 
     const allRatings = await EventRatingRepository.find({ where: { eventId } });
     const avg =
-        allRatings.reduce((sum: number, r: { rating: any; }) => sum + Number(r.rating), 0) / allRatings.length;
+        allRatings.reduce((sum: number, r: { rating: any; }) => sum + Number(r.rating), 0) /
+        allRatings.length;
 
     post.overallAvgRating = avg;
     await PostRepository.save(post);
 
     return {
-        message: "Event ratings added successfully.",
         ratings: ratingEntities,
         overallAvgRating: avg,
     };
 };
+
 
 export const saveEmotions = async (userId: number, postId: number, data: CreateEmotionInput) => {
     const post = await PostRepository.findOneBy({ id: postId, isDeleted: false });
@@ -641,7 +747,7 @@ export const togglePostLike = async (userId: number, postId: number) => {
     let stats = await PostStatisticsRepository.findOneBy({ postId });
 
     if (!stats) {
-        stats = PostStatisticsRepository.save({
+        stats = await PostStatisticsRepository.save({
             postId,
             totalLikes: 0,
             totalShares: 0,
@@ -672,7 +778,7 @@ export const togglePostLike = async (userId: number, postId: number) => {
         like.deletedAt = null;
         await PostLikeRepository.save(like);
     } else {
-        like = PostLikeRepository.save({
+        like = await PostLikeRepository.save({
             userId,
             postId,
             isDeleted: false,
@@ -691,7 +797,7 @@ export const togglePostLike = async (userId: number, postId: number) => {
         const postOwner = await UserRepository.findOneBy({ id: postOwnerId });
 
         if (postOwner) {
-            const notification = NotificationRepository.save({
+            const notification = await NotificationRepository.save({
                 notificationId: PostNotificationCode.POST_LIKED,
                 receiver: postOwner,
                 sender: user,
@@ -722,17 +828,78 @@ export const togglePostLike = async (userId: number, postId: number) => {
     return { liked: true, totalLikes: post.likesCount };
 };
 
-export const addCommentToPost = async (userId: number, postId: number, comment: string) => {
-    if (!comment || comment.trim() === '') {
-        throw new BadRequestError('Comment cannot be empty');
+// export const addCommentToPost = async (userId: number, postId: number, comment: string) => {
+//     if (!comment || comment.trim() === '') {
+//         throw new BadRequestError('Comment cannot be empty');
+//     }
+
+//     const post = await PostRepository.findOneBy({ id: postId, isDeleted: false });
+//     if (!post) throw new NotFoundError('Post not found or already deleted');
+
+//     const stats = await PostStatisticsRepository.findOneBy({ postId });
+
+//     const newComment = await PostCommentRepository.save({
+//         userId,
+//         postId,
+//         comment: comment.trim(),
+//         isDeleted: false,
+//     });
+
+//     post.commentCount += 1;
+//     if (stats) stats.totalComments += 1;
+
+//     await Promise.all([
+//         PostRepository.save(post),
+//         stats ? PostStatisticsRepository.save(stats) : null,
+//     ]);
+
+//     return {
+//         comment: newComment,
+//         totalComments: post.commentCount,
+//     };
+// };
+
+
+export const addCommentToPost = async (
+    userId: number,
+    postId: number,
+    comment: string
+) => {
+    if (!comment || comment.trim() === "") {
+        throw new BadRequestError("Comment cannot be empty");
+    }
+
+    const user = await UserRepository.findOne({
+        where: { id: userId, isDeleted: false },
+        relations: ["role"],
+    });
+
+    if (!user) {
+        throw new NotFoundError("User not found");
+    }
+
+    if (user.role.name !== RoleName.USER) {
+        throw new BadRequestError("Only users can comment on posts");
     }
 
     const post = await PostRepository.findOneBy({ id: postId, isDeleted: false });
-    if (!post) throw new NotFoundError('Post not found or already deleted');
+    if (!post) throw new NotFoundError("Post not found or already deleted");
 
-    const stats = await PostStatisticsRepository.findOneBy({ postId });
+    let stats = await PostStatisticsRepository.findOneBy({ postId });
+    if (!stats) {
+        stats = await PostStatisticsRepository.save({
+            postId,
+            totalLikes: 0,
+            totalShares: 0,
+            totalComments: 0,
+            totalRatings: 0,
+            averageRating: null,
+            criteriaRatings: {},
+            emotionCounts: {},
+        });
+    }
 
-    const newComment = PostCommentRepository.save({
+    const newComment = await PostCommentRepository.save({
         userId,
         postId,
         comment: comment.trim(),
@@ -740,15 +907,53 @@ export const addCommentToPost = async (userId: number, postId: number, comment: 
     });
 
     post.commentCount += 1;
-    if (stats) stats.totalComments += 1;
+    stats.totalComments += 1;
 
     await Promise.all([
         PostRepository.save(post),
-        stats ? PostStatisticsRepository.save(stats) : null,
+        PostStatisticsRepository.save(stats),
     ]);
 
+    // 🔔 Notify post owner
+    const postOwnerId = post.userId ?? post.producerId;
+
+    if (postOwnerId && postOwnerId !== userId) {
+        const postOwner = await UserRepository.findOneBy({ id: postOwnerId });
+
+        if (postOwner) {
+            // Save DB notification
+            const notification = await NotificationRepository.save({
+                notificationId: PostNotificationCode.POST_COMMENTED,
+                receiver: postOwner,
+                sender: user,
+                title: "New Comment on Your Post",
+                body: `${user.fullName} commented: "${comment.trim()}"`,
+                type: NotificationTypeEnums.POST_COMMENT,
+                purpose: NotificationTypeEnums.POST_COMMENT,
+            });
+
+            // Push FCM notification
+            if (postOwner.deviceId) {
+                const notificationPayload = {
+                    notificationId: String(PostNotificationCode.POST_COMMENTED),
+                    postId: String(post.id),
+                    type: NotificationTypeEnums.POST_COMMENT,
+                    senderId: String(userId),
+                    createdAt: new Date().toISOString(),
+                };
+
+                await sendAdminNotification(
+                    postOwner.deviceId,
+                    notification.title,
+                    notification.body,
+                    notificationPayload
+                );
+            }
+        }
+    }
+
     return {
-        commentId: newComment,
+        comment: newComment,
         totalComments: post.commentCount,
     };
 };

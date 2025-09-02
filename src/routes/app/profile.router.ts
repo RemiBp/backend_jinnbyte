@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { ProfileController } from '../../controllers/app/profile.controller';
-import { authenticateJWT, checkStatus } from '../../middlewares/auth.middleware';
+import { authenticateJWT, authenticateUserJWT, checkStatus } from '../../middlewares/auth.middleware';
 
 const UserProfileRouter = Router();
 
@@ -9,7 +9,7 @@ UserProfileRouter.get('/', (req, res) => {
 });
 UserProfileRouter.delete('/deleteAccountByEmail', ProfileController.deleteAccountByEmail);
 
-UserProfileRouter.use(authenticateJWT);
+UserProfileRouter.use(authenticateUserJWT);
 UserProfileRouter.use(checkStatus);
 
 UserProfileRouter.put('/updateProfile', ProfileController.updateProfile);
