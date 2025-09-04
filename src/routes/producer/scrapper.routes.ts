@@ -19,6 +19,8 @@ ScrapperRouter.post('/setOperationalHours', ProfileController.setOperationalHour
 ScrapperRouter.post('/getPreSignedUrl', ScrapperController.getPreSignedUrl);
 ScrapperRouter.post('/setGalleryImages', ScrapperController.setGalleryImages);
 ScrapperRouter.post('/setOperationalHours', ProfileController.setOperationalHours);
+ScrapperRouter.post('/setServiceType', ScrapperController.setServiceType);
+ScrapperRouter.get('/getAllServiceTypes', ScrapperController.getAllServiceTypes);
 
 
 export default ScrapperRouter;

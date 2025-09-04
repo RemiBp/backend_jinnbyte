@@ -1,12 +1,12 @@
 import { Request, Response, NextFunction } from "express";
-import { LeisureRepository, RestaurantRatingRepository, WellnessRepository } from "../../repositories";
+import { LeisureRepository, RestaurantRatingRepository, WellnessRepository, WellnessServiceTypeRepository } from "../../repositories";
 import { sendApiResponse } from "../../utils/sendApiResponse";
 import { NotFoundError } from "../../errors/notFound.error";
 import { z } from "zod";
 import { BadRequestError } from "../../errors/badRequest.error";
 import { ScrapperService } from "../../services/producer/scrapper.service";
 import { presignedURLSchema } from "../../validators/producer/profile.validation";
-import { LeisureAIRatingSchema, RestaurantAIRatingSchema, WellnessAIRatingSchema } from "../../validators/producer/scrapper.validation";
+import { LeisureAIRatingSchema, RestaurantAIRatingSchema, WellnessAIRatingSchema, setServiceTypeSchema } from "../../validators/producer/scrapper.validation";
 
 
 export const saveRestaurantAIRating = async (req: Request, res: Response, next: NextFunction) => {
@@ -80,22 +80,49 @@ export const getPreSignedUrl = async (req: Request, res: Response, next: NextFun
 };
 
 export const setGalleryImages = async (req: Request, res: Response, next: NextFunction) => {
-  try {
-    const { producerId, images } = req.body;
+    try {
+        const { producerId, images } = req.body;
 
-    if (!producerId) {
-      throw new BadRequestError("producerId is required");
+        if (!producerId) {
+            throw new BadRequestError("producerId is required");
+        }
+        if (!images || !Array.isArray(images) || images.length === 0) {
+            throw new BadRequestError("images array is required");
+        }
+
+        await ScrapperService.setGalleryImages(Number(producerId), images);
+
+        res.status(200).json({ message: "Gallery images saved successfully" });
+    } catch (error) {
+        next(error);
     }
-    if (!images || !Array.isArray(images) || images.length === 0) {
-      throw new BadRequestError("images array is required");
+};
+
+export const setServiceType = async (req: Request, res: Response, next: NextFunction) => {
+    try {
+        const { producerId, serviceTypeIds } = setServiceTypeSchema.parse(req.body);
+
+        const result = await ScrapperService.setServiceType({
+            producerId: Number(producerId),
+            serviceTypeIds,
+        });
+
+        res.status(200).json({
+            message: "Service types updated successfully",
+            ...result,
+        });
+    } catch (err) {
+        next(err);
     }
+};
 
-    await ScrapperService.setGalleryImages(Number(producerId), images);
-
-    res.status(200).json({ message: "Gallery images saved successfully" });
-  } catch (error) {
-    next(error);
-  }
+export const getAllServiceTypes = async (req: Request, res: Response, next: NextFunction) => {
+    try {
+        const types = await WellnessServiceTypeRepository.find();
+        res.status(200).json(types);
+    } catch (err) {
+        next(err);
+    }
 };
 
 
