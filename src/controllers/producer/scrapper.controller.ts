@@ -1,12 +1,12 @@
 import { Request, Response, NextFunction } from "express";
-import { LeisureRepository, RestaurantRatingRepository, WellnessRepository, WellnessServiceTypeRepository } from "../../repositories";
+import { EventRepository, LeisureRepository, MenuDishesRepository, RestaurantRatingRepository, WellnessRepository, WellnessServiceRepository, WellnessServiceTypeRepository } from "../../repositories";
 import { sendApiResponse } from "../../utils/sendApiResponse";
 import { NotFoundError } from "../../errors/notFound.error";
 import { z } from "zod";
 import { BadRequestError } from "../../errors/badRequest.error";
 import { ScrapperService } from "../../services/producer/scrapper.service";
 import { presignedURLSchema } from "../../validators/producer/profile.validation";
-import { LeisureAIRatingSchema, RestaurantAIRatingSchema, WellnessAIRatingSchema, setServiceTypeSchema } from "../../validators/producer/scrapper.validation";
+import { EventRatingSchema, LeisureAIRatingSchema, MenuRatingSchema, RestaurantAIRatingSchema, ServiceRatingSchema, WellnessAIRatingSchema, setServiceTypeSchema } from "../../validators/producer/scrapper.validation";
 
 
 export const saveRestaurantAIRating = async (req: Request, res: Response, next: NextFunction) => {
@@ -120,6 +120,51 @@ export const getAllServiceTypes = async (req: Request, res: Response, next: Next
     try {
         const types = await WellnessServiceTypeRepository.find();
         res.status(200).json(types);
+    } catch (err) {
+        next(err);
+    }
+};
+
+export const saveMenuRating = async (req: Request, res: Response, next: NextFunction) => {
+    try {
+        const parsed = MenuRatingSchema.parse(req.body);
+        const dish = await MenuDishesRepository.findOne({ where: { id: parsed.menuId } });
+        if (!dish) throw new NotFoundError("Menu dish not found");
+
+        dish.rating = parsed.rating;
+        const saved = await MenuDishesRepository.save(dish);
+
+        return sendApiResponse(res, 200, "Menu rating saved successfully", saved);
+    } catch (err) {
+        next(err);
+    }
+};
+
+export const saveServiceRating = async (req: Request, res: Response, next: NextFunction) => {
+    try {
+        const parsed = ServiceRatingSchema.parse(req.body);
+        const service = await WellnessServiceRepository.findOne({ where: { id: parsed.serviceId } });
+        if (!service) throw new NotFoundError("Service not found");
+
+        service.rating = parsed.rating;
+        const saved = await WellnessServiceRepository.save(service);
+
+        return sendApiResponse(res, 200, "Service rating saved successfully", saved);
+    } catch (err) {
+        next(err);
+    }
+};
+
+export const saveEventRating = async (req: Request, res: Response, next: NextFunction) => {
+    try {
+        const parsed = EventRatingSchema.parse(req.body);
+        const event = await EventRepository.findOne({ where: { id: parsed.eventId } });
+        if (!event) throw new NotFoundError("Event not found");
+
+        event.rating = parsed.rating;
+        const saved = await EventRepository.save(event);
+
+        return sendApiResponse(res, 200, "Event rating saved successfully", saved);
     } catch (err) {
         next(err);
     }

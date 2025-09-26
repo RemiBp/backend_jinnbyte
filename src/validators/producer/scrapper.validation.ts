@@ -1,3 +1,4 @@
+import e from "express";
 import { z } from "zod";
 
 const score = (field: string) =>
@@ -40,8 +41,29 @@ export type LeisureAIRatingInput = z.infer<typeof LeisureAIRatingSchema>;
 export type WellnessAIRatingInput = z.infer<typeof WellnessAIRatingSchema>;
 
 export const setServiceTypeSchema = z.object({
- producerId: z.coerce.number().int().positive(),
+  producerId: z.coerce.number().int().positive(),
   serviceTypeIds: z.array(z.coerce.number().int().positive()).nonempty(),
 });
+
+export const MenuRatingSchema = z.object({
+  menuId: z.number(),
+  rating: z.record(z.number()),
+});
+
+export type MenuRatingInput = z.infer<typeof MenuRatingSchema>;
+
+export const ServiceRatingSchema = z.object({
+  serviceId: z.number(),
+  rating: z.record(z.number()),
+});
+
+export type ServiceRatingInput = z.infer<typeof ServiceRatingSchema>;
+
+export const EventRatingSchema = z.object({
+  eventId: z.number(),
+  rating: z.record(z.number()),
+});
+
+export type EventRatingInput = z.infer<typeof EventRatingSchema>;
 
 export type SetServiceTypeInput = z.infer<typeof setServiceTypeSchema>;
