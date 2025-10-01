@@ -24,6 +24,7 @@ import Follow from './Follow';
 import MenuCategory from './MenuCategory';
 import ProducerDocument from './ProducerDocument';
 import ProducerOffer from './ProducerOffer';
+import CuisineType from './CuisineType';
 
 @Entity('Producers')
 export default class Producer {
@@ -156,6 +157,9 @@ export default class Producer {
 
     @OneToMany(() => Follow, (follow) => follow.producer, { cascade: true })
     followers: Follow[];
+
+     @ManyToOne(() => CuisineType, cuisineType => cuisineType.producer)
+      cuisineType: CuisineType;
 
     @CreateDateColumn()
     createdAt: Date;
