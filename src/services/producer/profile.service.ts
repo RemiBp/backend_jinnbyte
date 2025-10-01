@@ -1930,12 +1930,15 @@ export const setCuisineType = async (userId : number, cuisineTypeId : number) =>
       where: { id: userId },
       relations: ['producer'],
     });
+    const producer = await ProducerRepository.findOne({
+      where: { user: { id: userId } },
+      relations: ['cuisineType'],
+    })
     if (!user || !user.producer) {
       throw new NotFoundError('producer not found for this user');
     } 
-    const producer = user.producer; 
     producer.cuisineType = cuisineTypeId;
-    await UserRepository.save(producer);
+    await ProducerRepository.save(producer);
     return {
       message: "Cuisine type set successfully.",
     };
