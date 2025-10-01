@@ -39,6 +39,7 @@ import DishRating from './DishRating';
 import ChatMember from './ChatMember';
 import Message from './Message';
 import Chat from './Chat';
+import Bookmark from './Bookmark';
 
 @Entity('Users')
 export default class User {
@@ -99,7 +100,7 @@ export default class User {
   @OneToMany(() => EventRating, rating => rating.user)
   eventRatings: EventRating[];
 
-   @OneToMany(() => ChatMember, (chatMember) => chatMember.user)
+  @OneToMany(() => ChatMember, (chatMember) => chatMember.user)
   chatMemberships: ChatMember[];
 
   @OneToMany(() => Message, (message) => message.sender)
@@ -163,6 +164,9 @@ export default class User {
 
   @OneToMany(() => PostTag, tag => tag.user, { cascade: true })
   postTags: PostTag[];
+
+  @OneToMany(() => Bookmark, (bookmark) => bookmark.user)
+  bookmarks: Bookmark[];
 
   @OneToMany(() => PostEmotion, emotion => emotion.user, { cascade: true })
   postEmotions: PostEmotion[];

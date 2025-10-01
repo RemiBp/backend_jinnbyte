@@ -17,6 +17,7 @@ import { PostType, PostStatus } from '../enums/post.enum';
 import ServiceRating from './ServiceRatings';
 import EventRating from './EventRating';
 import DishRating from './DishRating';
+import Bookmark from './Bookmark';
 
 @Entity('Posts')
 export default class Post {
@@ -71,6 +72,9 @@ export default class Post {
 
     @OneToMany(() => EventRating, rating => rating.post)
     eventRatings: EventRating[];
+
+    @OneToMany(() => Bookmark, (bookmark) => bookmark.post)
+    bookmarks: Bookmark[];
 
     @ManyToOne(() => User, { nullable: true, onDelete: 'CASCADE' })
     @JoinColumn({ name: 'userId' })

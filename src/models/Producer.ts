@@ -24,6 +24,7 @@ import Follow from './Follow';
 import MenuCategory from './MenuCategory';
 import ProducerDocument from './ProducerDocument';
 import ProducerOffer from './ProducerOffer';
+import Bookmark from './Bookmark';
 
 @Entity('Producers')
 export default class Producer {
@@ -131,6 +132,9 @@ export default class Producer {
 
     @OneToMany(() => Photo, photo => photo.producer)
     photos: Photo[];
+
+    @OneToMany(() => Bookmark, (bookmark) => bookmark.producer)
+    bookmarks: Bookmark[];
 
     @OneToMany(() => MenuCategory, MenuCategory => MenuCategory.producer)
     menuCategory: MenuCategory[];
