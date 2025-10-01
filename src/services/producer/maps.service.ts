@@ -36,9 +36,15 @@ export const getNearbyProducers = async (data: NearbyProducersInput) => {
     if (type) {
         qb.andWhere("p.type = :type", { type });
 
-        if (type === "restaurant") applyRestaurantFilters(qb, data);
-        if (type === "leisure") applyLeisureFilters(qb, data);
-        if (type === "wellness") applyWellnessFilters(qb, data);
+        const filterAppliers = {
+            "restaurant": applyRestaurantFilters,
+            "leisure": applyLeisureFilters,
+            "wellness": applyWellnessFilters,
+        };
+
+        if (type && type in filterAppliers) {
+            filterAppliers[type](qb, data);
+        }
     }
 
     if (sort === "rating") {

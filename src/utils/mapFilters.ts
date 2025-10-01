@@ -1,8 +1,9 @@
 import { SelectQueryBuilder } from "typeorm";
 import Producer from "../models/Producer";
+import { NearbyProducersInput } from "../validators/producer/maps.validation";
 
 // Restaurant Filters
-export const applyRestaurantFilters = (qb: SelectQueryBuilder<Producer>, filters: any) => {
+export const applyRestaurantFilters = (qb: SelectQueryBuilder<Producer>, filters: NearbyProducersInput) => {
     // Join ratings once
     qb.leftJoin("RestaurantRatings", "rr", "rr.producerId = p.id");
 
@@ -44,13 +45,20 @@ export const applyRestaurantFilters = (qb: SelectQueryBuilder<Producer>, filters
 };
 
 // Leisure Filters
-export const applyLeisureFilters = (qb: SelectQueryBuilder<Producer>, filters: any) => {
+export const applyLeisureFilters = (qb: SelectQueryBuilder<Producer>, filters: NearbyProducersInput) => {
     qb.innerJoin("Leisure", "l", "l.producerId = p.id");
 
-    if (filters.venue) {
-        qb.innerJoin("Events", "e", "e.producerId = p.id")
-            .innerJoin("EventTypes", "et", "et.id = e.eventTypeId")
-            .andWhere("et.name = :venue", { venue: filters.venue });
+    if (filters.venue || filters.event) {
+        qb.innerJoin("Events", "e", "e.producerId = p.id");
+
+        if (filters.venue) {
+            qb.innerJoin("EventTypes", "et", "et.id = e.eventTypeId")
+                .andWhere("et.name = :venue", { venue: filters.venue });
+        }
+
+        if (filters.event) {
+            qb.andWhere("e.title ILIKE :event", { event: `%${filters.event}%` });
+        }
     }
 
     if (filters.event) {
@@ -73,10 +81,7 @@ export const applyLeisureFilters = (qb: SelectQueryBuilder<Producer>, filters: a
 };
 
 // Wellness Filters
-export const applyWellnessFilters = (
-    qb: SelectQueryBuilder<Producer>,
-    filters: any
-) => {
+export const applyWellnessFilters = (qb: SelectQueryBuilder<Producer>,filters: NearbyProducersInput) => {
     qb.innerJoin("Wellness", "w", "w.producerId = p.id");
 
     if (filters.venue) {

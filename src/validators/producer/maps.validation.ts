@@ -30,6 +30,11 @@ export const NearbyProducersSchema = z.object({
     event: z.string().optional(),
     emotionalImpact: z.array(z.string()).optional(),
 
+    minStageDirection: z.coerce.number().optional(),
+    minActorPerformance: z.coerce.number().optional(),
+    minTextQuality: z.coerce.number().optional(),
+    minScenography: z.coerce.number().optional(),
+
     // Wellness filters
     minCareQuality: z.coerce.number().optional(),
     minCleanliness: z.coerce.number().optional(),
