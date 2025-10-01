@@ -1,0 +1,109 @@
+import { SelectQueryBuilder } from "typeorm";
+import Producer from "../models/Producer";
+
+// Restaurant Filters
+export const applyRestaurantFilters = (qb: SelectQueryBuilder<Producer>, filters: any) => {
+    // Join ratings once
+    qb.leftJoin("RestaurantRatings", "rr", "rr.producerId = p.id");
+
+    // Join menu data only if needed
+    if (filters.cuisine || filters.dishName) {
+        qb.leftJoin("MenuCategory", "mc", "mc.producerId = p.id")
+            .leftJoin("MenuDishes", "md", "md.menuCategoryId = mc.id");
+    }
+
+    // Cuisine filter → from MenuCategory
+    if (filters.cuisine) {
+        qb.andWhere("mc.name = :cuisine", { cuisine: filters.cuisine });
+    }
+
+    // Dish name filter → from MenuDishes
+    if (filters.dishName) {
+        qb.andWhere("md.name ILIKE :dishName", { dishName: `%${filters.dishName}%` });
+    }
+
+    // Rating filters
+    if (filters.minAmbiance) {
+        qb.andWhere("rr.ambiance >= :ambiance", { ambiance: filters.minAmbiance });
+    }
+    if (filters.minService) {
+        qb.andWhere("rr.service >= :service", { service: filters.minService });
+    }
+    if (filters.minPortions) {
+        qb.andWhere("rr.portions >= :portions", { portions: filters.minPortions });
+    }
+    if (filters.minPlace) {
+        qb.andWhere("rr.place >= :place", { place: filters.minPlace });
+    }
+
+    // Dish rating filter
+    if (filters.minDishRating) {
+        qb.leftJoin("DishRatings", "dr", "dr.dishId = md.id")
+            .andWhere("dr.rating >= :dishRating", { dishRating: filters.minDishRating });
+    }
+};
+
+// Leisure Filters
+export const applyLeisureFilters = (qb: SelectQueryBuilder<Producer>, filters: any) => {
+    qb.innerJoin("Leisure", "l", "l.producerId = p.id");
+
+    if (filters.venue) {
+        qb.innerJoin("Events", "e", "e.producerId = p.id")
+            .innerJoin("EventTypes", "et", "et.id = e.eventTypeId")
+            .andWhere("et.name = :venue", { venue: filters.venue });
+    }
+
+    if (filters.event) {
+        qb.innerJoin("Events", "e2", "e2.producerId = p.id")
+            .andWhere("e2.title ILIKE :event", { event: `%${filters.event}%` });
+    }
+
+    if (filters.minStageDirection) {
+        qb.andWhere("l.stageDirection >= :stageDirection", { stageDirection: filters.minStageDirection });
+    }
+    if (filters.minActorPerformance) {
+        qb.andWhere("l.actorPerformance >= :actorPerformance", { actorPerformance: filters.minActorPerformance });
+    }
+    if (filters.minTextQuality) {
+        qb.andWhere("l.textQuality >= :textQuality", { textQuality: filters.minTextQuality });
+    }
+    if (filters.minScenography) {
+        qb.andWhere("l.scenography >= :scenography", { scenography: filters.minScenography });
+    }
+};
+
+// Wellness Filters
+export const applyWellnessFilters = (
+    qb: SelectQueryBuilder<Producer>,
+    filters: any
+) => {
+    qb.innerJoin("Wellness", "w", "w.producerId = p.id");
+
+    if (filters.venue) {
+        qb.innerJoin("WellnessServices", "ws", "ws.wellnessId = w.id")
+            .innerJoin("WellnessServiceTypes", "wst", "wst.id = ws.serviceTypeId")
+            .andWhere("wst.name = :venue", { venue: filters.venue });
+    }
+
+    if (filters.minCareQuality) {
+        qb.andWhere("w.careQuality >= :careQuality", { careQuality: filters.minCareQuality });
+    }
+    if (filters.minCleanliness) {
+        qb.andWhere("w.cleanliness >= :cleanliness", { cleanliness: filters.minCleanliness });
+    }
+    if (filters.minWelcome) {
+        qb.andWhere("w.welcome >= :welcome", { welcome: filters.minWelcome });
+    }
+    if (filters.minValueForMoney) {
+        qb.andWhere("w.valueForMoney >= :valueForMoney", { valueForMoney: filters.minValueForMoney });
+    }
+    if (filters.minAtmosphere) {
+        qb.andWhere("w.atmosphere >= :atmosphere", { atmosphere: filters.minAtmosphere });
+    }
+    if (filters.minStaffExperience) {
+        qb.andWhere("w.staffExperience >= :staffExperience", { staffExperience: filters.minStaffExperience });
+    }
+    if (filters.minAverageScore) {
+        qb.andWhere("w.overall >= :averageScore", { averageScore: filters.minAverageScore });
+    }
+};

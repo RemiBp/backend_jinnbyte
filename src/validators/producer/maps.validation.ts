@@ -1,17 +1,43 @@
 import { z } from 'zod';
+import { DayOfWeekEnum, TimeOfDayEnum } from '../../enums/OfferEnums';
+import { ProducerType, SortOption } from '../../enums/ProducerType.enum';
 
 const csv = z
     .string()
     .transform((s) => s.split(",").map(v => v.trim()).filter(Boolean));
 
+// src/validators/maps.ts
 export const NearbyProducersSchema = z.object({
     latitude: z.coerce.number(),
     longitude: z.coerce.number(),
-    radius: z.coerce.number().default(5), // km
-    type: z.enum(["restaurant", "leisure", "wellness"]).optional(),
-    sort: z.enum(["distance", "rating"]).default("distance"),
+    radius: z.coerce.number().default(5),
+    type: z.nativeEnum(ProducerType).optional(),
+    sort: z.nativeEnum(SortOption).default(SortOption.DISTANCE),
     limit: z.coerce.number().default(30),
     page: z.coerce.number().default(1),
+
+    // Restaurant filters
+    cuisine: z.string().optional(),
+    dishName: z.string().optional(),
+    minAmbiance: z.coerce.number().optional(),
+    minService: z.coerce.number().optional(),
+    minPortions: z.coerce.number().optional(),
+    minPlace: z.coerce.number().optional(),
+    minDishRating: z.coerce.number().optional(),
+
+    // Leisure filters
+    venue: z.string().optional(),
+    event: z.string().optional(),
+    emotionalImpact: z.array(z.string()).optional(),
+
+    // Wellness filters
+    minCareQuality: z.coerce.number().optional(),
+    minCleanliness: z.coerce.number().optional(),
+    minWelcome: z.coerce.number().optional(),
+    minValueForMoney: z.coerce.number().optional(),
+    minAtmosphere: z.coerce.number().optional(),
+    minStaffExperience: z.coerce.number().optional(),
+    minAverageScore: z.coerce.number().optional(),
 });
 
 export type NearbyProducersInput = z.infer<typeof NearbyProducersSchema>;
@@ -49,6 +75,10 @@ export const createOfferSchema = z.object({
     radiusMeters: z.number().min(1),
     imageUrl: z.string().url().optional(),
     scheduledAt: z.union([z.string().datetime(), z.date()]).optional(),
+    timeOfDay: z.nativeEnum(TimeOfDayEnum).default(TimeOfDayEnum.ALL_DAY),
+    daysOfWeek: z
+        .array(z.nativeEnum(DayOfWeekEnum))
+        .default([DayOfWeekEnum.EVERYDAY]),
 });
 
 

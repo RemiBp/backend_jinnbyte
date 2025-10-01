@@ -9,6 +9,7 @@ import {
 } from 'typeorm';
 import Producer from './Producer';
 import { OfferStatus } from '../enums/offer.enum';
+import { DayOfWeekEnum, TimeOfDayEnum } from '../enums/OfferEnums';
 
 @Entity('ProducerOffer')
 export default class ProducerOffer {
@@ -42,6 +43,21 @@ export default class ProducerOffer {
 
     @Column({ nullable: true })
     imageUrl: string;
+
+    @Column({
+        type: "enum",
+        enum: TimeOfDayEnum,
+        default: TimeOfDayEnum.ALL_DAY,
+    })
+    timeOfDay: TimeOfDayEnum;
+
+    @Column({
+        type: "enum",
+        enum: DayOfWeekEnum,
+        array: true,
+        default: [DayOfWeekEnum.EVERYDAY],
+    })
+    daysOfWeek: DayOfWeekEnum[];
 
     @Column({ type: 'enum', enum: OfferStatus, default: OfferStatus.DRAFT })
     status: OfferStatus;

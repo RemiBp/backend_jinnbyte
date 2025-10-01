@@ -35,6 +35,18 @@ export const createProducerOffer = async (req: Request, res: Response, next: Nex
     }
 };
 
+export const getProducerOffers = async (req: Request, res: Response, next: NextFunction) => {
+    try {
+        const { producerId } = req.params;
+        const offers = await MapsService.getProducerOffers(Number(producerId));
+
+        return sendApiResponse(res, 200, "Producer offers fetched successfully", offers);
+    } catch (err) {
+        console.error("Error in getProducerOffersController:", err);
+        next(err);
+    }
+};
+
 export const getProducerDetails = async (req: Request, res: Response, next: NextFunction) => {
     try {
         const id = Number(req.params.id);

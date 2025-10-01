@@ -2,23 +2,19 @@ import { FollowStatusEnums } from '../../enums/followStatus.enum';
 import { OfferStatus } from '../../enums/offer.enum';
 import { NotFoundError } from '../../errors/notFound.error';
 import { FollowRepository, PostRepository, ProducerOfferRepository, ProducerRepository, UserRepository } from '../../repositories';
+import { applyLeisureFilters, applyRestaurantFilters, applyWellnessFilters } from '../../utils/mapFilters';
 import { ChoiceMapInput, createOfferInput, GetFilteredRestaurantsInput, NearbyProducersInput } from '../../validators/producer/maps.validation';
 
 const EARTH_RADIUS_KM = 6371;
 
-export const getNearbyProducers = async ({
-    latitude,
-    longitude,
-    radius,
-    type,
-    limit = 30,
-    page = 1,
-}: NearbyProducersInput) => {
+export const getNearbyProducers = async (data: NearbyProducersInput) => {
+    const { latitude, longitude, radius, type, limit = 30, page = 1, sort } = data;
+
     const distExpr = `${EARTH_RADIUS_KM} * 2 * ASIN(SQRT(
-      POWER(SIN(RADIANS(:lat - p.latitude) / 2), 2) +
-      COS(RADIANS(:lat)) * COS(RADIANS(p.latitude)) *
-      POWER(SIN(RADIANS(:lng - p.longitude) / 2), 2)
-    ))`;
+    POWER(SIN(RADIANS(:lat - p.latitude) / 2), 2) +
+    COS(RADIANS(:lat)) * COS(RADIANS(p.latitude)) *
+    POWER(SIN(RADIANS(:lng - p.longitude) / 2), 2)
+  ))`;
 
     const qb = ProducerRepository.createQueryBuilder("p")
         .select([
@@ -34,16 +30,24 @@ export const getNearbyProducers = async ({
         .andWhere("p.latitude IS NOT NULL AND p.longitude IS NOT NULL")
         .andWhere(`${distExpr} <= :radius`, { radius })
         .setParameters({ lat: latitude, lng: longitude })
-        .orderBy("distance_km", "ASC")
         .offset((page - 1) * limit)
         .limit(limit);
 
     if (type) {
         qb.andWhere("p.type = :type", { type });
+
+        if (type === "restaurant") applyRestaurantFilters(qb, data);
+        if (type === "leisure") applyLeisureFilters(qb, data);
+        if (type === "wellness") applyWellnessFilters(qb, data);
     }
 
-    const rows = await qb.getRawMany();
-    return rows;
+    if (sort === "rating") {
+        qb.orderBy("p.globalRating", "DESC");
+    } else {
+        qb.orderBy("distance_km", "ASC");
+    }
+
+    return qb.getRawMany();
 };
 
 export const getNearbyUsers = async ({ latitude, longitude, radius, }: ChoiceMapInput) => {
@@ -98,7 +102,9 @@ export const createProducerOffer = async (data: createOfferInput) => {
 
     const now = new Date();
     const scheduledAt = data.scheduledAt ? new Date(data.scheduledAt) : now;
-    const expiresAt = new Date(scheduledAt.getTime() + data.validityMinutes * 60 * 1000);
+    const expiresAt = new Date(
+        scheduledAt.getTime() + data.validityMinutes * 60 * 1000
+    );
 
     const offer = ProducerOfferRepository.create({
         producer,
@@ -113,10 +119,24 @@ export const createProducerOffer = async (data: createOfferInput) => {
         scheduledAt,
         expiresAt,
         status: data.scheduledAt ? OfferStatus.DRAFT : OfferStatus.ACTIVE,
+        timeOfDay: data.timeOfDay,
+        daysOfWeek: data.daysOfWeek,
     });
 
     await ProducerOfferRepository.save(offer);
     return offer;
+};
+
+export const getProducerOffers = async (producerId: number) => {
+    const producer = await ProducerRepository.findOneBy({ id: producerId });
+    if (!producer) throw new NotFoundError("Producer not found");
+
+    const offers = await ProducerOfferRepository.find({
+        where: { producerId },
+        order: { createdAt: "DESC" },
+    });
+
+    return offers;
 };
 
 export const getProducerDetails = async (id: number) => {
@@ -134,7 +154,7 @@ export const getProducerDetails = async (id: number) => {
     });
 
     const recentPosts = await PostRepository.find({
-        where: { producerId: id, isDeleted: false },
+        where: { producerId: id },
         relations: ["images"],
         order: { createdAt: "DESC" },
         take: 5,
