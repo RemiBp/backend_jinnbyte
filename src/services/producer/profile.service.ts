@@ -129,7 +129,7 @@ export const updateProfile = async (
 export const getProfile = async (userId: number) => {
   const user = await UserRepository.findOne({
     where: { id: userId },
-    relations: ['businessProfile', 'producer', 'restaurant', 'restaurant.cuisineType'],
+    relations: ['businessProfile', 'producer', 'producer.cuisineType'],
   });
 
   if (!user) {
@@ -1928,14 +1928,14 @@ export const setCuisineType = async (userId : number, cuisineTypeId : number) =>
   try {
     const user = await UserRepository.findOne({
       where: { id: userId },
-      relations: ['restaurant'],
+      relations: ['producer'],
     });
     if (!user || !user.restaurant) {
       throw new NotFoundError('Restaurant not found for this user');
     } 
-    const restaurant = user.producer; 
-    restaurant.cuisineType = cuisineTypeId;
-    await UserRepository.save(restaurant);
+    const producer = user.producer; 
+    producer.cuisineType = cuisineTypeId;
+    await UserRepository.save(producer);
     return {
       message: "Cuisine type set successfully.",
     };
