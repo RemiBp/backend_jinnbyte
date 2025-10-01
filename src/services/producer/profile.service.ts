@@ -1930,8 +1930,8 @@ export const setCuisineType = async (userId : number, cuisineTypeId : number) =>
       where: { id: userId },
       relations: ['producer'],
     });
-    if (!user || !user.restaurant) {
-      throw new NotFoundError('Restaurant not found for this user');
+    if (!user || !user.producer) {
+      throw new NotFoundError('producer not found for this user');
     } 
     const producer = user.producer; 
     producer.cuisineType = cuisineTypeId;
