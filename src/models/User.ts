@@ -95,6 +95,9 @@ export default class User {
   @ManyToOne(() => Roles, (role: Roles) => role.users)
   role: Roles;
 
+  @Column({ nullable: true })
+  profileImageUrl: string;
+
   @OneToMany(() => ServiceRating, rating => rating.user)
   serviceRatings: ServiceRating[];
 

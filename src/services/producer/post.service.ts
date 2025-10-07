@@ -39,7 +39,7 @@ import { sendAdminNotification } from '../../utils/sendAdminNotification';
 import { NotificationTypeEnums, PostNotificationCode } from '../../enums/post-notification.enum';
 import { FollowStatusEnums } from '../../enums/followStatus.enum';
 import { LeisureRatingCriteria, RestaurantRatingCriteria, WellnessRatingCriteria } from '../../enums/rating.enum';
-import { EntityManager, ILike } from 'typeorm';
+import { EntityManager, ILike, In } from 'typeorm';
 import ServiceRating from '../../models/ServiceRatings';
 import ProducerService from '../../models/Services';
 import WellnessServiceType from '../../models/WellnessServiceTypes';
@@ -221,36 +221,166 @@ export const getPostsByProducer = async (userId: number, roleName: string) => {
 // };
 
 export const getPosts = async (userId: number, roleName: string) => {
-    if (roleName !== 'user') {
-        throw new Error('Only user role can fetch followed feed');
+    if (roleName !== "user") {
+        throw new BadRequestError("Only user role can fetch followed feed");
     }
 
-    const qb = PostRepository.createQueryBuilder('post')
-        .leftJoinAndSelect('post.images', 'images')
-        .leftJoinAndSelect('post.producer', 'producer')
+    //  Fetch all followed posts
+    const posts = await PostRepository.createQueryBuilder("post")
+        .leftJoinAndSelect("post.images", "images")
+        .leftJoinAndSelect("post.producer", "producer")
         .innerJoin(
             Follow,
-            'follow',
+            "follow",
             `"follow"."followerId" = :userId AND (
-        "post"."userId" = "follow"."followedUserId"
-        OR "post"."producerId" = "follow"."producerId"
-      )`,
+          "post"."userId" = "follow"."followedUserId" OR
+          "post"."producerId" = "follow"."producerId"
+        )`,
             { userId }
         )
+        .where("post.isDeleted = false")
+        .orderBy("post.createdAt", "DESC")
+        .getMany();
 
-        // Exclude posts from blocked users
-        .andWhere(`post."userId" NOT IN (
-      SELECT CASE
-        WHEN b."blockerId" = :userId THEN b."blockedUserId"
-        ELSE b."blockerId"
-      END
-      FROM "Blocks" b
-      WHERE b."blockerId" = :userId OR b."blockedUserId" = :userId
-    )`, { userId })
+    if (posts.length === 0) return [];
 
-        .orderBy('post.createdAt', 'DESC');
+    const postIds = posts.map((p: { id: any; }) => p.id);
+    const producerIds = posts
+        .map((p: { producer: { id: any; }; }) => p.producer?.id)
+        .filter((id: any): id is number => Boolean(id));
 
-    return qb.getMany();
+    // Batch fetch ratings
+    const [
+        allEventRatings,
+        allServiceRatings,
+        allDishRatings,
+        allRestaurantRatings,
+        allLeisureRatings,
+        allWellnessRatings,
+    ] = await Promise.all([
+        EventRatingRepository.find({
+            where: { postId: In(postIds) },
+            select: ["id", "rating", "criteria", "postId"],
+        }),
+        ServiceRatingRepository.find({
+            where: { postId: In(postIds) },
+            relations: ["producerService", "producerService.serviceType"],
+        }),
+        DishRatingRepository.find({
+            where: { postId: In(postIds) },
+            relations: ["dish", "dish.menuCategory"],
+            select: {
+                id: true,
+                rating: true,
+                postId: true,
+                dish: {
+                    id: true,
+                    name: true,
+                    description: true,
+                    price: true,
+                    menuCategory: { id: true, name: true },
+                },
+            },
+        }),
+        RestaurantRatingRepository.find({ where: { producerId: In(producerIds) } }),
+        LeisureRepository.find({ where: { producerId: In(producerIds) } }),
+        WellnessRepository.find({ where: { producerId: In(producerIds) } }),
+    ]);
+
+    //  Attach ratings directly to posts
+    for (const post of posts) {
+        const { type, producer } = post;
+
+        post.globalRating = null;
+        post.criteriaRatings = {};
+
+        if (type === BusinessRole.RESTAURANT && producer) {
+            const r = allRestaurantRatings.find((x: { producerId: any; }) => x.producerId === producer.id);
+            post.globalRating = r?.overall ?? null;
+            post.criteriaRatings = Object.fromEntries(
+                Object.values(RestaurantRatingCriteria).map((key) => [key, r?.[key] ?? null])
+            );
+            post.dishRatings = allDishRatings.filter((d: { postId: any; }) => d.postId === post.id);
+        }
+
+        if (type === BusinessRole.LEISURE && producer) {
+            const r = allLeisureRatings.find((x: { producerId: any; }) => x.producerId === producer.id);
+            post.globalRating = r?.overall ?? null;
+            post.criteriaRatings = Object.fromEntries(
+                Object.values(LeisureRatingCriteria).map((key) => [key, r?.[key] ?? null])
+            );
+            post.eventRatings = allEventRatings.filter((e: { postId: any; }) => e.postId === post.id);
+        }
+
+        if (type === BusinessRole.WELLNESS && producer) {
+            const r = allWellnessRatings.find((x: { producerId: any; }) => x.producerId === producer.id);
+            post.globalRating = r?.overall ?? null;
+            post.criteriaRatings = Object.fromEntries(
+                Object.values(WellnessRatingCriteria).map((key) => [key, r?.[key] ?? null])
+            );
+            post.serviceRatings = allServiceRatings.filter((s: { postId: any; }) => s.postId === post.id);
+        }
+    }
+    return posts;
+};
+
+export const getMyPosts = async (userId: number, roleName: string) => {
+    if (roleName === RoleName.USER) {
+        const posts = await PostRepository.find({
+            where: { userId },
+            relations: [
+                "images",
+                "producer",
+                "user",
+            ],
+            order: { createdAt: "DESC" },
+        });
+
+        return posts.map((post: any) => ({
+            ...post,
+            user: {
+                id: post.user?.id,
+                userName: post.user?.userName,
+                profileImageUrl: post.user?.profileImageUrl,
+                followersCount: post.user?.followersCount,
+                followingCount: post.user?.followingCount,
+            },
+        }));
+    }
+
+    if (Object.values(BusinessRole).includes(roleName as BusinessRole)) {
+        const producer = await ProducerRepository.findOne({
+            where: { userId },
+            relations: ["user"],
+        });
+
+        if (!producer) {
+            throw new NotFoundError("Producer profile not found for this user");
+        }
+
+        const posts = await PostRepository.find({
+            where: { producerId: producer.id },
+            relations: [
+                "images",
+                "producer",
+                "user",
+            ],
+            order: { createdAt: "DESC" },
+        });
+
+        return posts.map((post: any) => ({
+            ...post,
+            user: {
+                id: post.user?.id,
+                userName: post.user?.userName,
+                profileImageUrl: post.user?.profileImageUrl,
+                followersCount: post.user?.followersCount,
+                followingCount: post.user?.followingCount,
+            },
+        }));
+    }
+
+    throw new BadRequestError("Invalid role for fetching posts");
 };
 
 export const getUserPostById = async (userId: number, postId: number) => {

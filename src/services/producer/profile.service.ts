@@ -129,7 +129,7 @@ export const updateProfile = async (
 export const getProfile = async (userId: number) => {
   const user = await UserRepository.findOne({
     where: { id: userId },
-    relations: ['businessProfile', 'producer'],
+    relations: ['businessProfile', 'producer', 'producer.cuisineType'],
   });
 
   if (!user) {
@@ -142,6 +142,7 @@ export const getProfile = async (userId: number) => {
     isVerified: user.isVerified,
     businessProfile: user.businessProfile ? mapBusinessProfile(user.businessProfile) : null,
     producer: user.producer ? mapProducer(user.producer) : null,
+    cuisineType: user.producer ? user.producer.cuisineType : null,
   };
 };
 
@@ -1878,6 +1879,69 @@ export const getMenu = async (userId: number) => {
 
     return {
       menu: menuCategories,
+    };
+  } catch (error) {
+    throw error;
+  }
+};
+
+export const getCuisineTypes =  async ( page : number, limit : number) => {
+  try {
+    const [ cuisineTypes, count ] = await CuisineTypeRepository.findAndCount(
+      {
+        where: {
+          isActive: true,
+          isDeleted: false,
+        },
+        skip: (page - 1) * limit,
+        take: limit,
+      }
+    );
+    return {
+      cuisineTypes,
+      count,
+      currentPage: page,
+      totalPage: Math.ceil(count / limit),
+    };
+  } catch (error) {
+    throw error;
+  }
+};
+
+export const getCuisineType = async (cuisineTypeId : number) => {
+  try {
+    const cuisineType = await CuisineTypeRepository.findOne({ 
+      where: { id: cuisineTypeId },
+    });
+    if (!cuisineType) {
+      throw new NotFoundError('Cuisine type not found');
+    }
+    return {
+      cuisineType,
+    };
+  } catch (error) {
+    throw error;
+  }
+};
+
+
+export const setCuisineType = async (userId : number, cuisineTypeId : number) => {
+  try {
+    const user = await UserRepository.findOne({
+      where: { id: userId },
+      relations: ['producer'],
+    });
+    const producer = await ProducerRepository.findOne({
+      where: { user: { id: userId } },
+      relations: ['cuisineType'],
+    })
+    if (!user || !user.producer) {
+      throw new NotFoundError('producer not found for this user');
+    } 
+    producer.cuisineType = cuisineTypeId;
+    await ProducerRepository.save(producer);
+    return {
+      message: "Cuisine type set successfully.",
     };
   } catch (error) {
     throw error;
