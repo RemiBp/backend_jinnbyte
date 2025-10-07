@@ -4,26 +4,22 @@ import { NearbyProducersInput } from "../validators/producer/maps.validation";
 
 // Restaurant Filters
 export const applyRestaurantFilters = (qb: SelectQueryBuilder<Producer>, filters: NearbyProducersInput) => {
-    // Join ratings once
+    //  Join ratings once
     qb.leftJoin("RestaurantRatings", "rr", "rr.producerId = p.id");
 
-    // Join menu data only if needed
-    if (filters.cuisine || filters.dishName) {
-        qb.leftJoin("MenuCategory", "mc", "mc.producerId = p.id")
-            .leftJoin("MenuDishes", "md", "md.menuCategoryId = mc.id");
-    }
-
-    // Cuisine filter → from MenuCategory
     if (filters.cuisine) {
-        qb.andWhere("mc.name = :cuisine", { cuisine: filters.cuisine });
+        qb.innerJoin("p.cuisineType", "ct")
+            .andWhere("ct.name = :cuisine", { cuisine: filters.cuisine });
     }
 
-    // Dish name filter → from MenuDishes
+    //  Dish filters → still using MenuCategory & MenuDishes
     if (filters.dishName) {
-        qb.andWhere("md.name ILIKE :dishName", { dishName: `%${filters.dishName}%` });
+        qb.innerJoin("MenuCategory", "mc", "mc.producerId = p.id")
+            .innerJoin("MenuDishes", "md", "md.menuCategoryId = mc.id")
+            .andWhere("md.name ILIKE :dishName", { dishName: `%${filters.dishName}%` });
     }
 
-    // Rating filters
+    //  Rating filters
     if (filters.minAmbiance) {
         qb.andWhere("rr.ambiance >= :ambiance", { ambiance: filters.minAmbiance });
     }
@@ -37,7 +33,7 @@ export const applyRestaurantFilters = (qb: SelectQueryBuilder<Producer>, filters
         qb.andWhere("rr.place >= :place", { place: filters.minPlace });
     }
 
-    // Dish rating filter
+    //  Dish rating filter
     if (filters.minDishRating) {
         qb.leftJoin("DishRatings", "dr", "dr.dishId = md.id")
             .andWhere("dr.rating >= :dishRating", { dishRating: filters.minDishRating });
@@ -81,7 +77,7 @@ export const applyLeisureFilters = (qb: SelectQueryBuilder<Producer>, filters: N
 };
 
 // Wellness Filters
-export const applyWellnessFilters = (qb: SelectQueryBuilder<Producer>,filters: NearbyProducersInput) => {
+export const applyWellnessFilters = (qb: SelectQueryBuilder<Producer>, filters: NearbyProducersInput) => {
     qb.innerJoin("Wellness", "w", "w.producerId = p.id");
 
     if (filters.venue) {
