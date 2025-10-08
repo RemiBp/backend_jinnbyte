@@ -13,6 +13,7 @@ import Producer from "./Producer";
 import Event from "./Event";
 import InterestInvite from "./InterestInvite";
 import { InterestStatus, InterestType } from "../enums/interestStatus.enum";
+import Slot from "./Slots";
 
 @Entity("Interest")
 export default class Interest {
@@ -45,6 +46,14 @@ export default class Interest {
 
     @Column({ nullable: true })
     eventId?: number;
+
+    /** New Slot reference (for Producer interests only) */
+    @ManyToOne(() => Slot, { nullable: true })
+    @JoinColumn({ name: "slotId" })
+    slot?: Slot;
+
+    @Column({ nullable: true })
+    slotId?: number;
 
     @Column({ type: "timestamptz", nullable: true })
     suggestedTime?: Date;
