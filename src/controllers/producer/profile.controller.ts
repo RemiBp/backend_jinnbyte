@@ -50,6 +50,16 @@ export const getProfile = async (req: Request, res: Response, next: NextFunction
   }
 };
 
+export const deleteProfile = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const userId = Number(req.userId);
+    const result = await ProfileService.deleteProfile(userId);
+    res.status(200).json(result);
+  } catch (error) {
+    next(error);
+  }
+};
+
 export const getProducers = async (req: Request, res: Response, next: NextFunction) => {
   try {
     const response = await ProfileService.getProducers();

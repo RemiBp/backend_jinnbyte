@@ -54,6 +54,17 @@ export const getUserDetail = async (req: Request, res: Response, next: NextFunct
   }
 };
 
+export const deleteProfile = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const userId = Number(req.userId);
+    const result = await ProfileService.deleteProfile(userId);
+
+    return sendApiResponse(res, 200, 'Profile deleted successfully', result);
+  } catch (error) {
+    next(error);
+  }
+};
+
 export const getPreSignedUrlForProfileImage = async (req: Request, res: Response, next: NextFunction) => {
   try {
     const userId = req.userId;

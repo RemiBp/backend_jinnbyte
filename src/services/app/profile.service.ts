@@ -19,6 +19,7 @@ import { BadRequestError } from '../../errors/badRequest.error';
 import { NotFoundError } from '../../errors/notFound.error';
 import { In } from 'typeorm';
 import Block from '../../models/Block';
+import PostgresDataSource from '../../data-source';
 
 export const updateProfile = async (userId: number, updateProfileObject: UpdateProfileSchema) => {
   try {
@@ -96,6 +97,42 @@ export const getUserDetailById = async (userId: number) => {
   }
 
   return user;
+};
+
+export const deleteProfile = async (userId: number) => {
+  return await PostgresDataSource.transaction(async (manager: any) => {
+    const user = await manager.getRepository(UserRepository.target).findOne({
+      where: { id: userId },
+      relations: [
+        'Password',
+        'businessProfile',
+        'restaurant',
+        'producer',
+        'posts',
+        'postLikes',
+        'postComments',
+        'postShares',
+        'postTags',
+        'postEmotions',
+        'postRatings',
+        'follows',
+        'followedByUsers',
+      ],
+    });
+
+    if (!user) throw new NotFoundError('User not found');
+    if (user.isDeleted) throw new BadRequestError('User already deleted');
+
+    // Delete Password first (to prevent FK violation)
+    if (user.Password) {
+      await manager.getRepository(PasswordRepository.target).delete({ id: user.Password.id });
+    }
+
+    // Cascade delete all related entities (BusinessProfile, Restaurant, Producer, Posts, etc.)
+    await manager.remove(user);
+
+    return user;
+  });
 };
 
 export const getPreSignedUrlForProfileImage = async (userId: number, getPreSignedURLObject: PreSignedURL) => {
