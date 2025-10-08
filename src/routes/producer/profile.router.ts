@@ -16,6 +16,7 @@ ProducerProfileRouter.use(checkStatus);
 
 ProducerProfileRouter.put('/updateProfile', ProfileController.updateProfile);
 ProducerProfileRouter.get('/getProfile', ProfileController.getProfile);
+ProducerProfileRouter.delete('/deleteProfile', ProfileController.deleteProfile);
 ProducerProfileRouter.post('/setOperationalHours', ProfileController.setOperationalHours);
 ProducerProfileRouter.get('/getOperationalDays', ProfileController.getOperationalDays);
 ProducerProfileRouter.post('/capacity', ProfileController.setCapacity);

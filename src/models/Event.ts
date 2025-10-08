@@ -83,6 +83,9 @@ export default class Event {
     @Column({ nullable: true })
     eventTypeId: number;
 
+    @Column({ type: 'jsonb', nullable: true })
+    rating: Record<string, number>;
+
     @ManyToOne(() => Producer, { onDelete: 'CASCADE' })
     @JoinColumn({ name: 'producerId' })
     producer: Producer;

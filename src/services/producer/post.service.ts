@@ -196,6 +196,29 @@ export const getPostsByProducer = async (userId: number, roleName: string) => {
     return posts;
 };
 
+// export const getPosts = async (userId: number, roleName: string) => {
+//     if (roleName !== 'user') {
+//         throw new Error('Only user role can fetch followed feed');
+//     }
+
+//     const posts = await PostRepository.createQueryBuilder('post')
+//         .leftJoinAndSelect('post.images', 'images')
+//         .leftJoinAndSelect('post.producer', 'producer')
+//         .innerJoin(
+//             Follow,
+//             'follow',
+//             `"follow"."followerId" = :userId AND (
+//     "post"."userId" = "follow"."followedUserId" OR
+//     "post"."producerId" = "follow"."producerId"
+//   )`,
+//             { userId }
+//         )
+//         .where('post.isDeleted = false')
+//         .orderBy('post.createdAt', 'DESC')
+//         .getMany();
+
+//     return posts;
+// };
 
 export const getPosts = async (userId: number, roleName: string) => {
     if (roleName !== "user") {
@@ -1054,7 +1077,7 @@ export const addCommentToPost = async (
         PostStatisticsRepository.save(stats),
     ]);
 
-    // 🔔 Notify post owner
+    //  Notify post owner
     const postOwnerId = post.userId ?? post.producerId;
 
     if (postOwnerId && postOwnerId !== userId) {
@@ -1105,14 +1128,7 @@ export const getCommentsByPost = async (postId: number) => {
         order: { createdAt: 'DESC' },
     });
 
-    return comments.map((comment: { id: any; userId: any; postId: any; comment: any; createdAt: any; updatedAt: any; user: { id: any; name: any; profilePictureUrl: any; }; }) => ({
-        id: comment.id,
-        userId: comment.userId,
-        postId: comment.postId,
-        comment: comment.comment,
-        createdAt: comment.createdAt,
-        updatedAt: comment.updatedAt,
-    }));
+    return comments;
 };
 
 export const deleteComment = async (userId: number, commentId: number) => {
@@ -1370,6 +1386,22 @@ export const approvedRequest = async (userId: number, followId: number) => {
         message: 'Follow request approved successfully',
         data: follow,
     };
+};
+
+export const getFollowingRequest = async (userId: number) => {
+  const requests = await FollowRepository.createQueryBuilder('follow')
+    .leftJoinAndSelect('follow.follower', 'follower')
+    .where(
+      `follow.followedUserId = :userId 
+       OR follow.producerId IN (
+         SELECT p.id FROM "Producers" p WHERE p."userId" = :userId
+       )`,
+      { userId }
+    )
+    .andWhere('follow.status = :status', { status: FollowStatusEnums.Pending })
+    .getMany();
+
+  return requests;
 };
 
 export * as PostService from './post.service';

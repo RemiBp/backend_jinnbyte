@@ -54,6 +54,7 @@ import { mapBusinessProfile, mapProducer } from '../../utils/profile.mapper';
 import { BusinessRole } from '../../enums/Producer.enum';
 import MenuCategory from '../../models/MenuCategory';
 import MenuDishes from '../../models/MenuDishes';
+import PostgresDataSource from '../../data-source';
 
 export const getAllServiceType = async () => {
   const serviceTypes = await WellnessServiceTypeRepository.find({
@@ -144,6 +145,28 @@ export const getProfile = async (userId: number) => {
     producer: user.producer ? mapProducer(user.producer) : null,
     cuisineType: user.producer ? user.producer.cuisineType : null,
   };
+};
+
+export const deleteProfile = async (userId: number) => {
+  return await PostgresDataSource.transaction(async (manager: any) => {
+    const user = await manager.getRepository(UserRepository.target).findOne({
+      where: { id: userId },
+      relations: ['Password', 'producer', 'businessProfile'],
+    });
+
+    if (!user) throw new NotFoundError('User not found');
+    if (user.isDeleted) throw new BadRequestError('User already deleted');
+
+    // Delete password first (break the FK dependency)
+    if (user.Password) {
+      await manager.getRepository(PasswordRepository.target).delete({ id: user.Password.id });
+    }
+
+    // Now safely remove the user (cascade will take care of others)
+    await manager.remove(user);
+
+    return { message: 'Producer profile deleted successfully' };
+  });
 };
 
 export const getProducers = async () => {
