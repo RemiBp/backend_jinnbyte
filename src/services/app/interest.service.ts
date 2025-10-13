@@ -1,4 +1,4 @@
-import { InterestType } from "../../enums/interestStatus.enum";
+import { InterestStatus, InterestType } from "../../enums/interestStatus.enum";
 import { InviteStatus } from "../../enums/inviteStatus.enum";
 import { BadRequestError } from "../../errors/badRequest.error";
 import { ForbiddenError } from "../../errors/forbidden.error";
@@ -14,7 +14,7 @@ import {
     UserRepository,
 } from "../../repositories";
 import dayjs from "dayjs";
-import { AcceptInterestInviteInput, CreateInterestInput, DeclineInterestInviteInput, EditSlotInput, ReserveInterestInput, SuggestNewTimeInput } from "../../validators/app/interest.validation";
+import { AcceptInterestInviteInput, CreateInterestInput, DeclineInterestInviteInput, EditSlotInput, ReserveInterestInput, SuggestNewTimeInput, RespondToInviteSchema, RespondToInviteInput } from '../../validators/app/interest.validation';
 import { createBooking } from "./booking.service";
 import { In } from "typeorm";
 import { sendAdminNotification } from "../../utils/sendAdminNotification";
@@ -269,6 +269,22 @@ export const invitedDetails = async (userId: number, interestId: number) => {
 
     if (!interest) throw new NotFoundError("Interest not found");
 
+    // Authorization: creator or invited user
+    let isAuthorized = interest.userId === userId;
+
+    if (!isAuthorized && Array.isArray(interest.invites)) {
+        for (const invite of interest.invites as InterestInvite[]) {
+            if (invite.invitedUserId === userId) {
+                isAuthorized = true;
+                break;
+            }
+        }
+    }
+
+    if (!isAuthorized) {
+        throw new ForbiddenError("You are not authorized to view this interest");
+    }
+
     return interest;
 };
 
@@ -374,171 +390,44 @@ export const acceptInterestInvite = async (userId: number, data: AcceptInterestI
 };
 
 export const declineInterestInvite = async (userId: number, data: DeclineInterestInviteInput) => {
-    try {
-        const { interestId, reason } = data;
+    const { interestId, reason } = data;
 
-        if (!interestId || !userId) throw new Error("Invalid input: interestId and userId are required.");
-
-        const invite = await InterestInviteRepository.findOne({
-            where: { invitedUserId: userId, interestId },
-            relations: ["interest"],
-        });
-
-        if (!invite) throw new NotFoundError("Invite not found for this user.");
-
-        // Prevent decline after accept or already declined
-        if ([InviteStatus.DECLINED, InviteStatus.ACCEPTED].includes(invite.status)) {
-            throw new Error(`You cannot decline an invite that is already ${invite.status.toLowerCase()}.`);
-        }
-
-        invite.status = InviteStatus.DECLINED;
-        invite.declineReason = reason ?? null;
-        invite.respondedAt = new Date();
-        await InterestInviteRepository.save(invite);
-
-        // Notify the creator that someone declined
-        const interest = invite.interest;
-        if (interest) {
-            const creator = await UserRepository.findOne({ where: { id: interest.userId } });
-            const decliner = await UserRepository.findOne({ where: { id: userId } });
-
-            if (creator && decliner) {
-                const notificationData = {
-                    sender: { id: decliner.id } as User,
-                    receiver: { id: creator.id } as User,
-                    notificationId: NotificationStatusCode.INTEREST_DECLINED,
-                    type: NotificationTypeEnums.INTEREST_DECLINED,
-                    title: "Invite Declined",
-                    body: `${decliner.fullName || "Someone"} declined your interest invite.`,
-                    purpose: NotificationTypeEnums.INTEREST_DECLINED,
-                };
-
-                const notification = NotificationRepository.create(notificationData);
-                await NotificationRepository.save(notification);
-
-                if (creator.deviceId) {
-                    const notificationPayload = {
-                        notificationId: String(NotificationStatusCode.INTEREST_DECLINED),
-                        interestId: String(interest.id),
-                        type: NotificationTypeEnums.INTEREST_DECLINED,
-                        userId: String(decliner.id),
-                        profilePicture: String(decliner.profileImageUrl || ""),
-                        name: decliner.fullName || "Someone",
-                    };
-
-                    await sendAdminNotification(
-                        creator.deviceId,
-                        "Invite Declined",
-                        `${decliner.fullName || "Someone"} declined your interest invite.`,
-                        notificationPayload
-                    );
-                }
-            }
-        }
-
-        // If all declined → mark main interest as Declined
-        const allInvites = await InterestInviteRepository.find({ where: { interestId } });
-        const allDeclined = allInvites.every((i: any) => i.status === InviteStatus.DECLINED);
-
-        if (allDeclined) {
-            const interest = await InterestRepository.findOne({ where: { id: interestId } });
-            if (interest) {
-                interest.status = "Declined";
-                await InterestRepository.save(interest);
-
-                // Optional: notify everyone that the interest has been declined
-                const participants = await InterestInviteRepository.find({
-                    where: { interestId },
-                    relations: ["invitedUser"],
-                });
-
-                for (const participant of participants) {
-                    const user = participant.invitedUser;
-                    if (user?.deviceId) {
-                        await sendAdminNotification(
-                            user.deviceId,
-                            "Interest Declined",
-                            "All users have declined — this interest has been closed.",
-                            {
-                                notificationId: String(NotificationStatusCode.INTEREST_DECLINED),
-                                interestId: String(interestId),
-                                type: NotificationTypeEnums.INTEREST_DECLINED,
-                            }
-                        );
-                    }
-                }
-            }
-        }
-
-        return invite;
-    } catch (error: any) {
-        console.error("Error in declineInterestInvite:", error);
-        return {
-            success: false,
-            message: error.message || "Something went wrong while declining invite.",
-        };
+    if (!interestId || !userId) {
+        throw new BadRequestError("Invalid input: interestId and userId are required.");
     }
-};
 
-export const suggestNewTime = async (userId: number, data: SuggestNewTimeInput) => {
-    try {
-        const { interestId, slotId, suggestedTime, message } = data;
+    const invite = await InterestInviteRepository.findOne({
+        where: { invitedUserId: userId, interestId },
+        relations: ["interest"],
+    });
 
-        if (!interestId || !userId) throw new Error("Invalid input: interestId and userId are required.");
+    if (!invite) throw new NotFoundError("Invite not found for this user.");
 
-        const invite = await InterestInviteRepository.findOne({
-            where: { invitedUserId: userId, interestId },
-            relations: ["interest", "interest.producer"],
-        });
+    // Prevent decline after accept or already declined
+    if ([InviteStatus.DECLINED, InviteStatus.ACCEPTED].includes(invite.status)) {
+        throw new BadRequestError(`You cannot decline an invite that is already ${invite.status.toLowerCase()}.`);
+    }
 
-        if (!invite) throw new NotFoundError("Invite not found for this user.");
+    invite.status = InviteStatus.DECLINED;
+    invite.declineReason = reason ?? null;
+    invite.respondedAt = new Date();
+    await InterestInviteRepository.save(invite);
 
-        const interest = invite.interest;
-        if (!interest || !interest.producerId)
-            throw new Error("This interest is not linked to a valid producer.");
-
-        // Prevent suggesting new time after accept or decline
-        if ([InviteStatus.ACCEPTED, InviteStatus.DECLINED].includes(invite.status)) {
-            throw new Error(
-                `You cannot suggest a new time for an invite that is already ${invite.status.toLowerCase()}.`
-            );
-        }
-
-        // Validate slot belongs to same producer
-        let selectedSlot = null;
-        if (slotId) {
-            selectedSlot = await SlotRepository.findOne({
-                where: { id: slotId, userId: interest.producerId },
-            });
-            if (!selectedSlot)
-                throw new Error("Invalid slot: slot does not belong to this producer.");
-        }
-
-        invite.status = InviteStatus.SUGGESTED_NEW_TIME;
-        invite.suggestedSlotId = selectedSlot ? selectedSlot.id : null;
-        invite.suggestedTime = suggestedTime ? new Date(suggestedTime) : null;
-        invite.suggestedMessage = message ?? null;
-        invite.respondedAt = new Date();
-
-        await InterestInviteRepository.save(invite);
-
-        // Notify the creator about the new suggested time
+    // Notify the creator that someone declined
+    const interest = invite.interest;
+    if (interest) {
         const creator = await UserRepository.findOne({ where: { id: interest.userId } });
-        const suggester = await UserRepository.findOne({ where: { id: userId } });
+        const decliner = await UserRepository.findOne({ where: { id: userId } });
 
-        if (creator && suggester) {
-            const readableTime = suggestedTime
-                ? new Date(suggestedTime).toLocaleString("en-US", { dateStyle: "medium", timeStyle: "short" })
-                : "a new slot";
-
+        if (creator && decliner) {
             const notificationData = {
-                sender: { id: suggester.id } as User,
+                sender: { id: decliner.id } as User,
                 receiver: { id: creator.id } as User,
-                notificationId: NotificationStatusCode.INTEREST_SUGGESTED_NEW_TIME,
-                type: NotificationTypeEnums.INTEREST_SUGGESTED_NEW_TIME,
-                title: "New Time Suggested",
-                body: `${suggester.fullName || "Someone"} suggested ${readableTime} for your interest.`,
-                purpose: NotificationTypeEnums.INTEREST_SUGGESTED_NEW_TIME,
+                notificationId: NotificationStatusCode.INTEREST_DECLINED,
+                type: NotificationTypeEnums.INTEREST_DECLINED,
+                title: "Invite Declined",
+                body: `${decliner.fullName || "Someone"} declined your interest invite.`,
+                purpose: NotificationTypeEnums.INTEREST_DECLINED,
             };
 
             const notification = NotificationRepository.create(notificationData);
@@ -546,31 +435,145 @@ export const suggestNewTime = async (userId: number, data: SuggestNewTimeInput) 
 
             if (creator.deviceId) {
                 const notificationPayload = {
-                    notificationId: String(NotificationStatusCode.INTEREST_SUGGESTED_NEW_TIME),
+                    notificationId: String(NotificationStatusCode.INTEREST_DECLINED),
                     interestId: String(interest.id),
-                    type: NotificationTypeEnums.INTEREST_SUGGESTED_NEW_TIME,
-                    userId: String(suggester.id),
-                    profilePicture: String(suggester.profileImageUrl || ""),
-                    name: suggester.fullName || "Someone",
+                    type: NotificationTypeEnums.INTEREST_DECLINED,
+                    userId: String(decliner.id),
+                    profilePicture: String(decliner.profileImageUrl || ""),
+                    name: decliner.fullName || "Someone",
                 };
 
                 await sendAdminNotification(
                     creator.deviceId,
-                    "New Time Suggested",
-                    `${suggester.fullName || "Someone"} suggested ${readableTime} for your interest.`,
+                    "Invite Declined",
+                    `${decliner.fullName || "Someone"} declined your interest invite.`,
                     notificationPayload
                 );
             }
         }
-
-        return invite;
-    } catch (error: any) {
-        console.error("Error in suggestNewTime:", error);
-        return {
-            success: false,
-            message: error.message || "Something went wrong while suggesting new time.",
-        };
     }
+
+    // If all declined → mark main interest as Declined
+    const allInvites = await InterestInviteRepository.find({ where: { interestId } });
+    const allDeclined = allInvites.every((i: InterestInvite) => i.status === InviteStatus.DECLINED);
+
+    if (allDeclined) {
+        const interestRecord = await InterestRepository.findOne({ where: { id: interestId } });
+        if (interestRecord) {
+            interestRecord.status = InterestStatus.DECLINED;
+            await InterestRepository.save(interestRecord);
+
+            // Notify all participants
+            const participants = await InterestInviteRepository.find({
+                where: { interestId },
+                relations: ["invitedUser"],
+            });
+
+            for (const participant of participants) {
+                const user = participant.invitedUser;
+                if (user?.deviceId) {
+                    await sendAdminNotification(
+                        user.deviceId,
+                        "Interest Declined",
+                        "All users have declined — this interest has been closed.",
+                        {
+                            notificationId: String(NotificationStatusCode.INTEREST_DECLINED),
+                            interestId: String(interestId),
+                            type: NotificationTypeEnums.INTEREST_DECLINED,
+                        }
+                    );
+                }
+            }
+        }
+    }
+
+    return invite;
+};
+
+export const suggestNewTime = async (userId: number, data: SuggestNewTimeInput) => {
+    const { interestId, slotId, suggestedTime, message } = data;
+
+    if (!interestId || !userId) {
+        throw new BadRequestError("Invalid input: interestId and userId are required.");
+    }
+
+    const invite = await InterestInviteRepository.findOne({
+        where: { invitedUserId: userId, interestId },
+        relations: ["interest", "interest.producer"],
+    });
+
+    if (!invite) throw new NotFoundError("Invite not found for this user.");
+
+    const interest = invite.interest;
+    if (!interest || !interest.producerId)
+        throw new BadRequestError("This interest is not linked to a valid producer.");
+
+    // Prevent suggesting new time after accept or decline
+    if ([InviteStatus.ACCEPTED, InviteStatus.DECLINED].includes(invite.status)) {
+        throw new BadRequestError(
+            `You cannot suggest a new time for an invite that is already ${invite.status.toLowerCase()}.`
+        );
+    }
+
+    // Validate slot belongs to same producer
+    let selectedSlot = null;
+    if (slotId) {
+        selectedSlot = await SlotRepository.findOne({
+            where: { id: slotId, userId: interest.producerId },
+        });
+        if (!selectedSlot)
+            throw new BadRequestError("Invalid slot: slot does not belong to this producer.");
+    }
+
+    invite.status = InviteStatus.SUGGESTED_NEW_TIME;
+    invite.suggestedSlotId = selectedSlot ? selectedSlot.id : null;
+    invite.suggestedTime = suggestedTime ? new Date(suggestedTime) : null;
+    invite.suggestedMessage = message ?? null;
+    invite.respondedAt = new Date();
+    await InterestInviteRepository.save(invite);
+
+    // Notify the creator
+    const creator = await UserRepository.findOne({ where: { id: interest.userId } });
+    const suggester = await UserRepository.findOne({ where: { id: userId } });
+
+    if (creator && suggester) {
+        const readableTime = suggestedTime
+            ? new Date(suggestedTime).toLocaleString("en-US", { dateStyle: "medium", timeStyle: "short" })
+            : "a new slot";
+
+        const notificationData = {
+            sender: { id: suggester.id } as User,
+            receiver: { id: creator.id } as User,
+            notificationId: NotificationStatusCode.INTEREST_SUGGESTED_NEW_TIME,
+            type: NotificationTypeEnums.INTEREST_SUGGESTED_NEW_TIME,
+            title: "New Time Suggested",
+            body: `${suggester.fullName || "Someone"} suggested ${readableTime} for your interest.`,
+            purpose: NotificationTypeEnums.INTEREST_SUGGESTED_NEW_TIME,
+        };
+
+        const notification = NotificationRepository.create(notificationData);
+        await NotificationRepository.save(notification);
+
+        if (creator.deviceId) {
+            const notificationPayload = {
+                notificationId: String(NotificationStatusCode.INTEREST_SUGGESTED_NEW_TIME),
+                interestId: String(interest.id),
+                type: NotificationTypeEnums.INTEREST_SUGGESTED_NEW_TIME,
+                userId: String(suggester.id),
+                profilePicture: String(suggester.profileImageUrl || ""),
+                name: suggester.fullName || "Someone",
+            };
+
+            await sendAdminNotification(
+                creator.deviceId,
+                "New Time Suggested",
+                `${suggester.fullName || "Someone"} suggested ${readableTime} for your interest.`,
+                notificationPayload
+            );
+        }
+    }
+
+    return invite;
 };
 
 export const getUserInterests = async (userId: number) => {
@@ -601,7 +604,9 @@ export const getInterestDetails = async (userId: number, interestId: number) => 
     return interest;
 };
 
-export const respondToInvite = async (userId: number, interestId: number, response: string) => {
+export const respondToInvite = async (userId: number, data: RespondToInviteInput) => {
+    const { interestId, response } = data;
+
     const invite = await InterestInviteRepository.findOne({
         where: { interestId, invitedUserId: userId },
     });

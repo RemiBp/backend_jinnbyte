@@ -1,5 +1,5 @@
 import { Request, Response, NextFunction } from "express";
-import { AcceptInterestInviteSchema, CreateInterestSchema, DeclineInterestInviteSchema, EditSlotSchema, ReserveInterestSchema, SuggestNewTimeSchema } from "../../validators/app/interest.validation";
+import { AcceptInterestInviteSchema, CreateInterestSchema, DeclineInterestInviteSchema, EditSlotSchema, ReserveInterestSchema, RespondToInviteSchema, SuggestNewTimeSchema } from "../../validators/app/interest.validation";
 import { InterestService } from "../../services/app/interest.service";
 import { sendApiResponse } from "../../utils/sendApiResponse";
 
@@ -108,9 +108,11 @@ export const getInterestDetails = async (req: Request, res: Response, next: Next
 export const respondToInvite = async (req: Request, res: Response, next: NextFunction) => {
     try {
         const userId = Number(req.userId);
-        const { interestId, response: inviteResponse } = req.body;
-        const response = await InterestService.respondToInvite(userId, interestId, inviteResponse);
-        sendApiResponse(res, 200, "Invite response recorded successfully", response);
+        const parsed = RespondToInviteSchema.parse(req.body);
+
+        const result = await InterestService.respondToInvite(userId, parsed);
+
+        sendApiResponse(res, 200, "Invite response recorded successfully", result);
     } catch (error) {
         next(error);
     }

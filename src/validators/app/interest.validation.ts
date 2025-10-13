@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { InviteStatus } from "../../enums/inviteStatus.enum";
 
 export const CreateInterestSchema = z.object({
   type: z.enum(["Producer", "Event"]),
@@ -97,3 +98,16 @@ export const ReserveInterestSchema = z.object({
 });
 
 export type ReserveInterestInput = z.infer<typeof ReserveInterestSchema>;
+
+export const RespondToInviteSchema = z.object({
+  interestId: z.number({
+    required_error: "interestId is required",
+    invalid_type_error: "interestId must be a number",
+  }),
+  response: z.nativeEnum(InviteStatus, {
+    required_error: "response is required",
+    invalid_type_error: "Invalid response type",
+  }),
+});
+
+export type RespondToInviteInput = z.infer<typeof RespondToInviteSchema>;
