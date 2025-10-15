@@ -28,7 +28,7 @@ export const NearbyProducersSchema = z.object({
     // Leisure filters
     venue: z.string().optional(),
     event: z.string().optional(),
-    emotionalImpact: z.array(z.string()).optional(),
+    // emotionalImpact: z.array(z.string()).optional(),
 
     minStageDirection: z.coerce.number().optional(),
     minActorPerformance: z.coerce.number().optional(),
@@ -87,5 +87,15 @@ export const createOfferSchema = z.object({
     saveAsTemplate: z.boolean()
 });
 
-
 export type createOfferInput = z.infer<typeof createOfferSchema>;
+
+export const GetProducerOffersSchema = z.object({
+    params: z.object({
+        producerId: z
+            .string()
+            .regex(/^\d+$/, "producerId must be a valid numeric string")
+            .transform(Number),
+    }),
+});
+
+export type GetProducerOffersInput = z.infer<typeof GetProducerOffersSchema>;

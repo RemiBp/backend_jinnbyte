@@ -12,11 +12,17 @@ export const applyRestaurantFilters = (qb: SelectQueryBuilder<Producer>, filters
             .andWhere("ct.name = :cuisine", { cuisine: filters.cuisine });
     }
 
-    //  Dish filters → still using MenuCategory & MenuDishes
-    if (filters.dishName) {
+    if (filters.dishName || filters.minDishRating) {
         qb.innerJoin("MenuCategory", "mc", "mc.producerId = p.id")
-            .innerJoin("MenuDishes", "md", "md.menuCategoryId = mc.id")
-            .andWhere("md.name ILIKE :dishName", { dishName: `%${filters.dishName}%` });
+            .innerJoin("MenuDishes", "md", "md.menuCategoryId = mc.id");
+
+        if (filters.dishName) {
+            qb.andWhere("md.name ILIKE :dishName", { dishName: `%${filters.dishName}%` });
+        }
+
+        if (filters.minDishRating) {
+            qb.andWhere("md.averageRating >= :minDishRating", { minDishRating: filters.minDishRating });
+        }
     }
 
     //  Rating filters
@@ -55,11 +61,6 @@ export const applyLeisureFilters = (qb: SelectQueryBuilder<Producer>, filters: N
         if (filters.event) {
             qb.andWhere("e.title ILIKE :event", { event: `%${filters.event}%` });
         }
-    }
-
-    if (filters.event) {
-        qb.innerJoin("Events", "e2", "e2.producerId = p.id")
-            .andWhere("e2.title ILIKE :event", { event: `%${filters.event}%` });
     }
 
     if (filters.minStageDirection) {

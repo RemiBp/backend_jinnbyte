@@ -1,6 +1,6 @@
 import { MapsService } from '../../services/producer/maps.service';
 import { sendApiResponse } from '../../utils/sendApiResponse';
-import { ChoiceMapSchema, createOfferSchema, getFilteredRestaurantsSchema, NearbyProducersSchema } from '../../validators/producer/maps.validation';
+import { ChoiceMapSchema, createOfferSchema, getFilteredRestaurantsSchema, GetProducerOffersSchema, NearbyProducersSchema } from '../../validators/producer/maps.validation';
 import { Request, Response, NextFunction } from 'express';
 
 export const getNearbyProducers = async (req: Request, res: Response, next: NextFunction) => {
@@ -48,9 +48,10 @@ export const getOfferTemplates = async (req: Request, res: Response, next: NextF
 
 export const getProducerOffers = async (req: Request, res: Response, next: NextFunction) => {
     try {
-        const { producerId } = req.params;
-        const offers = await MapsService.getProducerOffers(Number(producerId));
+        const parsed = GetProducerOffersSchema.parse(req);
+        const { producerId } = parsed.params;
 
+        const offers = await MapsService.getProducerOffers(producerId);
         return sendApiResponse(res, 200, "Producer offers fetched successfully", offers);
     } catch (err) {
         console.error("Error in getProducerOffersController:", err);
