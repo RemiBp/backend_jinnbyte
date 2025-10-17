@@ -105,19 +105,6 @@ export const getInterestDetails = async (req: Request, res: Response, next: Next
     }
 };
 
-export const respondToInvite = async (req: Request, res: Response, next: NextFunction) => {
-    try {
-        const userId = Number(req.userId);
-        const parsed = RespondToInviteSchema.parse(req.body);
-
-        const result = await InterestService.respondToInvite(userId, parsed);
-
-        sendApiResponse(res, 200, "Invite response recorded successfully", result);
-    } catch (error) {
-        next(error);
-    }
-};
-
 export const editInterestSlot = async (req: Request, res: Response, next: NextFunction) => {
     try {
         const userId = Number(req.userId);

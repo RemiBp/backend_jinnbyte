@@ -66,12 +66,12 @@ export const deleteProfile = async (req: Request, res: Response, next: NextFunct
   }
 };
 
-export const getMyFriends = async (req: Request, res: Response, next: NextFunction) => {
+export const getMyFollowers = async (req: Request, res: Response, next: NextFunction) => {
   try {
     const userId = Number(req.userId);
 
-    const data = await ProfileService.getMyFriends(userId);
-    return sendApiResponse(res, 200, "Friends fetched successfully", data);
+    const data = await ProfileService.getMyFollowers(userId);
+    return sendApiResponse(res, 200, "Followers fetched successfully", data);
   } catch (error) {
     next(error);
   }

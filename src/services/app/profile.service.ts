@@ -139,24 +139,22 @@ export const deleteProfile = async (userId: number) => {
   });
 };
 
-export const getMyFriends = async (userId: number) => {
-  // Fetch all approved follows where user is follower
-  const friends = await FollowRepository.createQueryBuilder("f1")
-    .innerJoinAndSelect("f1.followedUser", "friend")
+export const getMyFollowers = async (userId: number) => {
+  const followers = await FollowRepository.createQueryBuilder("f1")
+    .innerJoin("f1.followedUser", "friend")
     .where("f1.followerId = :userId", { userId })
     .andWhere("f1.status = :status", { status: FollowStatusEnums.Approved })
-    .andWhere("f1.followedUserId IS NOT NULL") // exclude producers
-    .getMany();
+    .andWhere("f1.followedUserId IS NOT NULL")
+    .select([
+      "friend.id AS id",
+      "friend.fullName AS name",
+      "friend.email AS email",
+      "friend.profileImageUrl AS profileImage",
+    ])
+    .getRawMany();
 
-  // Return clean User objects
-  const friendUsers = friends.map((follow: Follow) => follow.followedUser);
-
-  return {
-    total: friendUsers.length,
-    friends: friendUsers,
-  };
+  return followers;
 };
-
 
 export const getPreSignedUrlForProfileImage = async (userId: number, getPreSignedURLObject: PreSignedURL) => {
   try {

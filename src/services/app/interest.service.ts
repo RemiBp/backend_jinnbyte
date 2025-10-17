@@ -13,29 +13,25 @@ import {
     SlotRepository,
     UserRepository,
 } from "../../repositories";
-import dayjs from "dayjs";
 import { AcceptInterestInviteInput, CreateInterestInput, DeclineInterestInviteInput, EditSlotInput, ReserveInterestInput, SuggestNewTimeInput, RespondToInviteSchema, RespondToInviteInput } from '../../validators/app/interest.validation';
 import { createBooking } from "./booking.service";
 import { In } from "typeorm";
-import { sendAdminNotification } from "../../utils/sendAdminNotification";
-import { NotificationRepository } from "../../repositories";
 import { NotificationTypeEnums } from "../../enums/notification.type.enum";
-import User from "../../models/User";
 import { NotificationStatusCode } from "../../enums/NotificationStatusCode.enum";
 import InterestInvite from "../../models/InterestInvite";
 import PostgresDataSource from "../../data-source";
 import { BookingStatusEnums } from "../../enums/bookingStatus.enum";
+import { sendNotification } from "../../utils/notificationHelper";
 
 export const createInterest = async (userId: number, data: CreateInterestInput) => {
     const { type, producerId, eventId, slotId, suggestedTime, message, invitedUserIds = [] } = data;
-
     let targetId: number | null = null;
 
     // Fetch creator (for notification sender info)
     const creator = await UserRepository.findOne({ where: { id: userId } });
     if (!creator) throw new NotFoundError("Creator not found");
 
-    // PRODUCER TYPE
+    // PRODUCER TYPE INTEREST
     if (type === InterestType.PRODUCER) {
         if (!producerId) throw new Error("producerId is required for Producer type");
         const producer = await ProducerRepository.findOne({ where: { id: producerId } });
@@ -82,47 +78,31 @@ export const createInterest = async (userId: number, data: CreateInterestInput) 
             }));
             await InterestInviteRepository.insert(invites);
 
-            // Create and save all DB notifications in one go
-            const notifications = validUsers.map((invitedUser: User) =>
-                NotificationRepository.create({
-                    sender: { id: creator.id } as User,
-                    receiver: { id: invitedUser.id } as User,
-                    notificationId: NotificationStatusCode.INTEREST_INVITE,
-                    type: NotificationTypeEnums.INTEREST_INVITE,
-                    title: "You’ve been invited!",
-                    body: `${creator.fullName} invited you to join an interest.`,
-                    purpose: NotificationTypeEnums.INTEREST_INVITE,
-                })
-            );
-
-            await NotificationRepository.save(notifications);
-
-            // Send push notifications (FCM) individually
-            for (const invitedUser of validUsers) {
-                if (invitedUser.deviceId) {
-                    const notificationPayload = {
-                        notificationId: String(NotificationStatusCode.INTEREST_INVITE),
-                        interestId: String(savedInterest.id),
+            // Send Notifications using helper
+            await Promise.all(
+                validUsers.map((invitedUser: any) =>
+                    sendNotification({
+                        senderId: creator.id,
+                        receiverId: invitedUser.id,
+                        notificationCode: NotificationStatusCode.INTEREST_INVITE,
                         type: NotificationTypeEnums.INTEREST_INVITE,
-                        userId: String(creator.id),
-                        profilePicture: String(creator.profileImageUrl || ""),
-                        name: creator.fullName,
-                    };
-
-                    await sendAdminNotification(
-                        invitedUser.deviceId,
-                        "You’ve been invited!",
-                        `${creator.fullName} invited you to join an interest.`,
-                        notificationPayload
-                    );
-                }
-            }
+                        title: "You’ve been invited!",
+                        body: `${creator.fullName} invited you to join an interest.`,
+                        restaurantName: creator.fullName,
+                        profilePicture: creator.profileImageUrl || "",
+                        fcmToken: invitedUser.deviceId,
+                        extraPayload: {
+                            interestId: String(savedInterest.id),
+                        },
+                    })
+                )
+            );
         }
 
         return savedInterest;
     }
 
-    // EVENT TYPE
+    // EVENT TYPE INTEREST
     if (type === InterestType.EVENT) {
         if (!eventId) throw new Error("eventId is required for Event type");
         const event = await EventRepository.findOne({ where: { id: eventId } });
@@ -141,54 +121,36 @@ export const createInterest = async (userId: number, data: CreateInterestInput) 
         const savedInterest = await InterestRepository.save(interest);
 
         if (invitedUserIds.length > 0) {
-            const validUsers: User[] = await UserRepository.find({
+            const validUsers = await UserRepository.find({
                 where: { id: In(invitedUserIds) },
                 select: ["id", "deviceId", "fullName", "profileImageUrl"],
             });
 
-            const invites: Partial<InterestInvite>[] = validUsers.map((u) => ({
+            const invites = validUsers.map((u: any) => ({
                 interestId: savedInterest.id,
                 invitedUserId: u.id,
             }));
-
             await InterestInviteRepository.insert(invites);
 
-            // Create all notification objects first
-            const notifications = validUsers.map((invitedUser: User) =>
-                NotificationRepository.create({
-                    sender: { id: creator.id } as User,
-                    receiver: { id: invitedUser.id } as User,
-                    notificationId: NotificationStatusCode.INTEREST_INVITE,
-                    type: NotificationTypeEnums.INTEREST_INVITE,
-                    title: "You’ve been invited!",
-                    body: `${creator.fullName} invited you to join an event interest.`,
-                    purpose: NotificationTypeEnums.INTEREST_INVITE,
-                })
-            );
-
-            // Save all notifications at once (single DB query)
-            await NotificationRepository.save(notifications);
-
-            // Send FCM notifications individually (only network I/O per user)
-            for (const invitedUser of validUsers) {
-                if (invitedUser.deviceId) {
-                    const notificationPayload = {
-                        notificationId: String(NotificationStatusCode.INTEREST_INVITE),
-                        interestId: String(savedInterest.id),
+            // Send Notifications using helper
+            await Promise.all(
+                validUsers.map((invitedUser: any) =>
+                    sendNotification({
+                        senderId: creator.id,
+                        receiverId: invitedUser.id,
+                        notificationCode: NotificationStatusCode.INTEREST_INVITE,
                         type: NotificationTypeEnums.INTEREST_INVITE,
-                        userId: String(creator.id),
-                        profilePicture: String(creator.profileImageUrl || ""),
-                        name: creator.fullName,
-                    };
-
-                    await sendAdminNotification(
-                        invitedUser.deviceId,
-                        "You’ve been invited!",
-                        `${creator.fullName} invited you to join an event interest.`,
-                        notificationPayload
-                    );
-                }
-            }
+                        title: "You’ve been invited!",
+                        body: `${creator.fullName} invited you to join an event interest.`,
+                        restaurantName: creator.fullName,
+                        profilePicture: creator.profileImageUrl || "",
+                        fcmToken: invitedUser.deviceId,
+                        extraPayload: {
+                            interestId: String(savedInterest.id),
+                        },
+                    })
+                )
+            );
         }
 
         return savedInterest;
@@ -300,90 +262,74 @@ export const acceptInterestInvite = async (userId: number, data: AcceptInterestI
 
     // Prevent re-accept or accept after decline/suggest
     if (
-        [InviteStatus.ACCEPTED, InviteStatus.DECLINED, InviteStatus.SUGGESTED_NEW_TIME].includes(
-            invite.status
-        )
+        [InviteStatus.ACCEPTED, InviteStatus.DECLINED, InviteStatus.SUGGESTED_NEW_TIME].includes(invite.status)
     ) {
-        throw new Error(
-            `You cannot accept an invite that is already ${invite.status.toLowerCase()}.`
-        );
+        throw new Error(`You cannot accept an invite that is already ${invite.status.toLowerCase()}.`);
     }
 
     invite.status = InviteStatus.ACCEPTED;
     invite.respondedAt = new Date();
     await InterestInviteRepository.save(invite);
 
-    // Notify creator that someone accepted their invite
+    // Notify the creator
     const interest = invite.interest;
     if (interest) {
         const creator = await UserRepository.findOne({ where: { id: interest.userId } });
         const accepter = await UserRepository.findOne({ where: { id: userId } });
 
         if (creator && accepter) {
-            const notificationData = {
-                sender: { id: accepter.id } as User,
-                receiver: { id: creator.id } as User,
-                notificationId: NotificationStatusCode.INTEREST_ACCEPTED,
+            await sendNotification({
+                senderId: accepter.id,
+                receiverId: creator.id,
+                notificationCode: NotificationStatusCode.INTEREST_ACCEPTED,
                 type: NotificationTypeEnums.INTEREST_ACCEPTED,
                 title: "Invite Accepted",
-                body: `${accepter.fullName || "Someone"} accepted your interest invite.`,
-                purpose: NotificationTypeEnums.INTEREST_ACCEPTED,
-            };
-
-            const notification = NotificationRepository.create(notificationData);
-            await NotificationRepository.save(notification);
-
-            if (creator.deviceId) {
-                const notificationPayload = {
-                    notificationId: String(NotificationStatusCode.INTEREST_ACCEPTED),
+                body: `${accepter.fullName || ""} accepted your interest invite.`,
+                restaurantName: accepter.fullName || "",
+                profilePicture: accepter.profileImageUrl || "",
+                fcmToken: creator.deviceId,
+                extraPayload: {
                     interestId: String(interest.id),
-                    type: NotificationTypeEnums.INTEREST_ACCEPTED,
-                    userId: String(accepter.id),
-                    profilePicture: String(accepter.profileImageUrl || ""),
-                    name: accepter.fullName || "Someone",
-                };
-
-                await sendAdminNotification(
-                    creator.deviceId,
-                    "Invite Accepted",
-                    `${accepter.fullName || "Someone"} accepted your interest invite.`,
-                    notificationPayload
-                );
-            }
+                },
+            });
         }
     }
 
-    // If all invited users have accepted → mark interest confirmed
+    // Check if all invites are accepted
     const allInvites = await InterestInviteRepository.find({ where: { interestId } });
-    const allAccepted = allInvites.every(
-        (inviteObj: InterestInvite) => inviteObj.status === InviteStatus.ACCEPTED
-    );
+    const allAccepted = allInvites.every((i: any) => i.status === InviteStatus.ACCEPTED);
 
     if (allAccepted && invite.interest) {
         invite.interest.status = "Confirmed";
         await InterestRepository.save(invite.interest);
 
-        // Optional: Notify all participants that interest is confirmed
+        // Notify all participants that interest is confirmed
         const participants = await InterestInviteRepository.find({
             where: { interestId },
             relations: ["invitedUser"],
         });
 
-        for (const participant of participants) {
-            const user = participant.invitedUser;
-            if (user?.deviceId) {
-                await sendAdminNotification(
-                    user.deviceId,
-                    "Interest Confirmed",
-                    "All users have accepted — your interest is now confirmed!",
-                    {
-                        notificationId: String(NotificationStatusCode.INTEREST_CONFIRMED),
+        await Promise.all(
+            participants.map((participant: any) => {
+                const user = participant.invitedUser;
+                if (!user) return null;
+
+                return sendNotification({
+                    senderId: invite.interest!.userId,
+                    receiverId: user.id,
+                    notificationCode: NotificationStatusCode.INTEREST_CONFIRMED,
+                    type: NotificationTypeEnums.INTEREST_CONFIRMED,
+                    title: "Interest Confirmed",
+                    body: "All users have accepted. Your interest is now confirmed!",
+                    restaurantName: invite.interest!.type || "",
+                    profilePicture: "",
+                    fcmToken: user.deviceId,
+                    extraPayload: {
                         interestId: String(interestId),
-                        type: NotificationTypeEnums.INTEREST_CONFIRMED,
-                    }
-                );
-            }
-        }
+                    },
+                });
+            })
+        );
     }
 
     return invite;
@@ -392,20 +338,62 @@ export const acceptInterestInvite = async (userId: number, data: AcceptInterestI
 export const declineInterestInvite = async (userId: number, data: DeclineInterestInviteInput) => {
     const { interestId, reason } = data;
 
-    if (!interestId || !userId) {
-        throw new BadRequestError("Invalid input: interestId and userId are required.");
-    }
-
-    const invite = await InterestInviteRepository.findOne({
-        where: { invitedUserId: userId, interestId },
-        relations: ["interest"],
+    // Always check main Interest first
+    const interest = await InterestRepository.findOne({
+        where: { id: interestId },
+        relations: ["user"], // to get creator easily
     });
 
-    if (!invite) throw new NotFoundError("Invite not found for this user.");
+    if (!interest) throw new NotFoundError("Interest not found.");
 
-    // Prevent decline after accept or already declined
+    // Then find user's invite
+    const invite = await InterestInviteRepository.findOne({
+        where: { invitedUserId: userId, interestId },
+    });
+
+    // Allow creator themselves to decline/cancel interest directly
+    const isCreatorDeclining = interest.userId === userId;
+
+    if (!invite && !isCreatorDeclining) {
+        throw new NotFoundError("Invite not found for this user.");
+    }
+
+    // If creator declines → close interest
+    if (isCreatorDeclining) {
+        interest.status = InterestStatus.DECLINED;
+        await InterestRepository.save(interest);
+
+        // Notify all participants that creator cancelled
+        const participants = await InterestInviteRepository.find({
+            where: { interestId },
+            relations: ["invitedUser"],
+        });
+
+        await Promise.all(
+            participants.map((participant: any) =>
+                participant.invitedUser
+                    ? sendNotification({
+                        senderId: userId,
+                        receiverId: participant.invitedUser.id,
+                        notificationCode: NotificationStatusCode.INTEREST_DECLINED,
+                        type: NotificationTypeEnums.INTEREST_DECLINED,
+                        title: "Interest Cancelled",
+                        body: "The creator has cancelled this interest.",
+                        fcmToken: participant.invitedUser.deviceId,
+                        extraPayload: { interestId: String(interestId) },
+                    })
+                    : null
+            )
+        );
+
+        return { message: "Interest cancelled by creator.", interest };
+    }
+
+    // Invited user declines
     if ([InviteStatus.DECLINED, InviteStatus.ACCEPTED].includes(invite.status)) {
-        throw new BadRequestError(`You cannot decline an invite that is already ${invite.status.toLowerCase()}.`);
+        throw new BadRequestError(
+            `You cannot decline an invite that is already ${invite.status.toLowerCase()}.`
+        );
     }
 
     invite.status = InviteStatus.DECLINED;
@@ -413,81 +401,73 @@ export const declineInterestInvite = async (userId: number, data: DeclineInteres
     invite.respondedAt = new Date();
     await InterestInviteRepository.save(invite);
 
-    // Notify the creator that someone declined
-    const interest = invite.interest;
-    if (interest) {
-        const creator = await UserRepository.findOne({ where: { id: interest.userId } });
-        const decliner = await UserRepository.findOne({ where: { id: userId } });
+    // Notify creator
+    const creator = await UserRepository.findOne({ where: { id: interest.userId } });
+    const decliner = await UserRepository.findOne({ where: { id: userId } });
 
-        if (creator && decliner) {
-            const notificationData = {
-                sender: { id: decliner.id } as User,
-                receiver: { id: creator.id } as User,
-                notificationId: NotificationStatusCode.INTEREST_DECLINED,
-                type: NotificationTypeEnums.INTEREST_DECLINED,
-                title: "Invite Declined",
-                body: `${decliner.fullName || "Someone"} declined your interest invite.`,
-                purpose: NotificationTypeEnums.INTEREST_DECLINED,
-            };
-
-            const notification = NotificationRepository.create(notificationData);
-            await NotificationRepository.save(notification);
-
-            if (creator.deviceId) {
-                const notificationPayload = {
-                    notificationId: String(NotificationStatusCode.INTEREST_DECLINED),
-                    interestId: String(interest.id),
-                    type: NotificationTypeEnums.INTEREST_DECLINED,
-                    userId: String(decliner.id),
-                    profilePicture: String(decliner.profileImageUrl || ""),
-                    name: decliner.fullName || "Someone",
-                };
-
-                await sendAdminNotification(
-                    creator.deviceId,
-                    "Invite Declined",
-                    `${decliner.fullName || "Someone"} declined your interest invite.`,
-                    notificationPayload
-                );
-            }
-        }
+    if (creator && decliner) {
+        await sendNotification({
+            senderId: decliner.id,
+            receiverId: creator.id,
+            notificationCode: NotificationStatusCode.INTEREST_DECLINED,
+            type: NotificationTypeEnums.INTEREST_DECLINED,
+            title: "Invite Declined",
+            body: `${decliner.fullName || ""} declined your interest invite.`,
+            restaurantName: decliner.fullName || "",
+            profilePicture: decliner.profileImageUrl || "",
+            fcmToken: creator.deviceId,
+            extraPayload: { interestId: String(interestId) },
+        });
     }
 
-    // If all declined → mark main interest as Declined
+    // Check if all invites are declined
     const allInvites = await InterestInviteRepository.find({ where: { interestId } });
-    const allDeclined = allInvites.every((i: InterestInvite) => i.status === InviteStatus.DECLINED);
+    const multipleInvitesExist = allInvites.length > 1;
+    const allDeclined =
+        multipleInvitesExist && allInvites.every((i: any) => i.status === InviteStatus.DECLINED);
 
     if (allDeclined) {
-        const interestRecord = await InterestRepository.findOne({ where: { id: interestId } });
-        if (interestRecord) {
-            interestRecord.status = InterestStatus.DECLINED;
-            await InterestRepository.save(interestRecord);
+        interest.status = InterestStatus.DECLINED;
+        await InterestRepository.save(interest);
 
-            // Notify all participants
-            const participants = await InterestInviteRepository.find({
-                where: { interestId },
-                relations: ["invitedUser"],
+        // Notify all participants + creator
+        const participants = await InterestInviteRepository.find({
+            where: { interestId },
+            relations: ["invitedUser"],
+        });
+
+        await Promise.all(
+            participants.map((participant: any) =>
+                participant.invitedUser
+                    ? sendNotification({
+                        senderId: interest.userId,
+                        receiverId: participant.invitedUser.id,
+                        notificationCode: NotificationStatusCode.INTEREST_DECLINED,
+                        type: NotificationTypeEnums.INTEREST_DECLINED,
+                        title: "Interest Declined",
+                        body: "All users have declined. This interest has been closed.",
+                        fcmToken: participant.invitedUser.deviceId,
+                        extraPayload: { interestId: String(interestId) },
+                    })
+                    : null
+            )
+        );
+
+        if (creator?.deviceId) {
+            await sendNotification({
+                senderId: interest.userId,
+                receiverId: creator.id,
+                notificationCode: NotificationStatusCode.INTEREST_DECLINED,
+                type: NotificationTypeEnums.INTEREST_DECLINED,
+                title: "Interest Declined",
+                body: "All users have declined. Your interest is now closed.",
+                fcmToken: creator.deviceId,
+                extraPayload: { interestId: String(interestId) },
             });
-
-            for (const participant of participants) {
-                const user = participant.invitedUser;
-                if (user?.deviceId) {
-                    await sendAdminNotification(
-                        user.deviceId,
-                        "Interest Declined",
-                        "All users have declined — this interest has been closed.",
-                        {
-                            notificationId: String(NotificationStatusCode.INTEREST_DECLINED),
-                            interestId: String(interestId),
-                            type: NotificationTypeEnums.INTEREST_DECLINED,
-                        }
-                    );
-                }
-            }
         }
     }
 
-    return invite;
+    return { interest, invite };
 };
 
 export const suggestNewTime = async (userId: number, data: SuggestNewTimeInput) => {
@@ -538,39 +518,27 @@ export const suggestNewTime = async (userId: number, data: SuggestNewTimeInput) 
 
     if (creator && suggester) {
         const readableTime = suggestedTime
-            ? new Date(suggestedTime).toLocaleString("en-US", { dateStyle: "medium", timeStyle: "short" })
+            ? new Date(suggestedTime).toLocaleString("en-US", {
+                dateStyle: "medium",
+                timeStyle: "short",
+            })
             : "a new slot";
 
-        const notificationData = {
-            sender: { id: suggester.id } as User,
-            receiver: { id: creator.id } as User,
-            notificationId: NotificationStatusCode.INTEREST_SUGGESTED_NEW_TIME,
+        await sendNotification({
+            senderId: suggester.id,
+            receiverId: creator.id,
+            notificationCode: NotificationStatusCode.INTEREST_SUGGESTED_NEW_TIME,
             type: NotificationTypeEnums.INTEREST_SUGGESTED_NEW_TIME,
             title: "New Time Suggested",
-            body: `${suggester.fullName || "Someone"} suggested ${readableTime} for your interest.`,
-            purpose: NotificationTypeEnums.INTEREST_SUGGESTED_NEW_TIME,
-        };
-
-        const notification = NotificationRepository.create(notificationData);
-        await NotificationRepository.save(notification);
-
-        if (creator.deviceId) {
-            const notificationPayload = {
-                notificationId: String(NotificationStatusCode.INTEREST_SUGGESTED_NEW_TIME),
+            body: `${suggester.fullName || ""} suggested ${readableTime} for your interest.`,
+            restaurantName: suggester.fullName || "",
+            profilePicture: suggester.profileImageUrl || "",
+            fcmToken: creator.deviceId,
+            extraPayload: {
                 interestId: String(interest.id),
-                type: NotificationTypeEnums.INTEREST_SUGGESTED_NEW_TIME,
-                userId: String(suggester.id),
-                profilePicture: String(suggester.profileImageUrl || ""),
-                name: suggester.fullName || "Someone",
-            };
-
-            await sendAdminNotification(
-                creator.deviceId,
-                "New Time Suggested",
-                `${suggester.fullName || "Someone"} suggested ${readableTime} for your interest.`,
-                notificationPayload
-            );
-        }
+                suggestedTime: suggestedTime ? String(suggestedTime) : "",
+            },
+        });
     }
 
     return invite;
@@ -584,7 +552,6 @@ export const getUserInterests = async (userId: number) => {
             "event",
             "slot",
             "invites",
-            "invites.invitedUser",
         ],
         order: { createdAt: "DESC" },
     });
@@ -602,19 +569,6 @@ export const getInterestDetails = async (userId: number, interestId: number) => 
     if (!interest) throw new NotFoundError("Interest not found");
 
     return interest;
-};
-
-export const respondToInvite = async (userId: number, data: RespondToInviteInput) => {
-    const { interestId, response } = data;
-
-    const invite = await InterestInviteRepository.findOne({
-        where: { interestId, invitedUserId: userId },
-    });
-    if (!invite) throw new NotFoundError("Invite not found");
-    invite.status = response;
-
-    const updatedInvite = await InterestInviteRepository.save(invite);
-    return updatedInvite;
 };
 
 export const editInterestSlot = async (userId: number, data: EditSlotInput) => {

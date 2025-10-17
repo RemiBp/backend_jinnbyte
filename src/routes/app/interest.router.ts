@@ -20,7 +20,6 @@ UserInterestRouter.post('/suggestNewTime', InterestController.suggestNewTime);
 
 UserInterestRouter.get('/myInterests', InterestController.getUserInterests);
 UserInterestRouter.get('/interestDetails/:interestId', InterestController.getInterestDetails);
-UserInterestRouter.post('/respondToInvite', InterestController.respondToInvite);
 UserInterestRouter.post('/editInterestSlot', InterestController.editInterestSlot);
 UserInterestRouter.post('/reserveInterest', InterestController.reserveInterest);
 
