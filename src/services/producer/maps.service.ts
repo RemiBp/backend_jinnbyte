@@ -228,11 +228,6 @@ export const getProducerDetails = async (id: number) => {
 export const getProducerHeatmap = async (data: GetProducerHeatmapInput) => {
     const { producerId } = data;
 
-    const parsedProducerId = parseInt(String(producerId), 10);
-    if (isNaN(parsedProducerId) || parsedProducerId <= 0) {
-        throw new Error(`Invalid producer ID: ${producerId}`);
-    }
-
     try {
         const qb = PostgresDataSource.getRepository(Post)
             .createQueryBuilder("post")
@@ -247,18 +242,13 @@ export const getProducerHeatmap = async (data: GetProducerHeatmapInput) => {
           'email', "user"."email"
         )) AS users`,
             ])
-            .where("post.producerId = :producerId", { producerId: parsedProducerId })
+            .where("post.producerId = :producerId", { producerId })
             .andWhere("user.latitude IS NOT NULL AND user.longitude IS NOT NULL")
             .groupBy(`ROUND("user"."latitude"::numeric, 4), ROUND("user"."longitude"::numeric, 4)`);
 
         const rawData = await qb.getRawMany();
 
-        return rawData.map((point: any) => ({
-            lat: Number(point.lat),
-            lng: Number(point.lng),
-            count: Number(point.count),
-            users: point.users || [],
-        }));
+        return rawData;
     } catch (error) {
         console.error("Error in getProducerHeatmap:", error);
         throw new Error("Failed to fetch heatmap data");
