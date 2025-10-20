@@ -3,6 +3,7 @@ import { FollowStatusEnums } from '../../enums/followStatus.enum';
 import { NotificationTypeEnums } from '../../enums/notification.type.enum';
 import { NotificationStatusCode } from '../../enums/NotificationStatusCode.enum';
 import { OfferStatus } from '../../enums/offer.enum';
+import { ProducerType, SortOption } from '../../enums/ProducerType.enum';
 import { NotFoundError } from '../../errors/notFound.error';
 import Post from '../../models/Post';
 import User from '../../models/User';
@@ -15,22 +16,23 @@ import { ChoiceMapInput, createOfferInput, GetFilteredRestaurantsInput, GetProdu
 const EARTH_RADIUS_KM = 6371;
 
 export const getNearbyProducers = async (userId: number, data: NearbyProducersInput) => {
-    const { latitude, longitude, radius, type, limit, page, sort, view } = data;
+    const { latitude, longitude, radius, type, limit, page, sort } = data;
 
-    //View = "friends" only
-    if (view === "friends") {
+    // FRIENDS ONLY 
+    if (type === ProducerType.FRIENDS) {
         if (!userId) throw new Error("userId is required to fetch nearby friends");
         const friends = await getNearbyFriends(latitude, longitude, radius, userId);
         return friends;
     }
 
-    // Producers (default)
+    // define distExpr before using it
     const distExpr = `${EARTH_RADIUS_KM} * 2 * ASIN(SQRT(
     POWER(SIN(RADIANS(:lat - p.latitude) / 2), 2) +
     COS(RADIANS(:lat)) * COS(RADIANS(p.latitude)) *
     POWER(SIN(RADIANS(:lng - p.longitude) / 2), 2)
   ))`;
 
+    // PRODUCERS QUERY
     const qb = ProducerRepository.createQueryBuilder("p")
         .select([
             "p.id AS id",
@@ -48,31 +50,35 @@ export const getNearbyProducers = async (userId: number, data: NearbyProducersIn
         .offset((page - 1) * limit)
         .limit(limit);
 
-    // Type filtering (same as old logic, now "all" safe)
-    if (type) {
-        qb.andWhere("(:type = 'all' OR p.type::text = :type)", { type });
+    // TYPE FILTERING - simplified condition since FRIENDS is already handled
+    if (type && type !== ProducerType.ALL) {
+        qb.andWhere("p.type::text = :type", { type });
 
         const filterAppliers = {
-            restaurant: applyRestaurantFilters,
-            leisure: applyLeisureFilters,
-            wellness: applyWellnessFilters,
+            [ProducerType.RESTAURANT]: applyRestaurantFilters,
+            [ProducerType.LEISURE]: applyLeisureFilters,
+            [ProducerType.WELLNESS]: applyWellnessFilters,
         };
 
-        // Apply producer-type specific filters
-        if (filterAppliers[type as keyof typeof filterAppliers]) {
-            filterAppliers[type as keyof typeof filterAppliers](qb, data);
-        }
+        const applyFilter = filterAppliers[type as keyof typeof filterAppliers];
+        if (applyFilter) applyFilter(qb, data);
     }
 
-    // Sorting logic
-    if (sort === "rating") qb.orderBy("p.globalRating", "DESC");
+    // SORTING
+    if (sort === SortOption.RATING)
+        qb.orderBy("p.globalRating", "DESNELSC");
     else qb.orderBy("distance_km", "ASC");
 
     const producers = await qb.getRawMany();
 
-    // View = "all" → friends + producers merged
-    if (view === "all" && userId) {
-        const friends = await getNearbyFriends(latitude, longitude, radius, userId);
+    // TYPE = "all" → return producers + friends
+    if (type === ProducerType.ALL && userId) {
+        const friends = await getNearbyFriends(
+            latitude,
+            longitude,
+            radius,
+            userId
+        );
         return { producers, friends };
     }
 
@@ -86,8 +92,8 @@ const getNearbyFriends = async (lat: number, lng: number, radius: number, userId
     POWER(SIN(RADIANS(:lng - u.longitude) / 2), 2)
   ))`;
 
-    return await UserRepository.createQueryBuilder("u")
-        // Fixed: Use followedUserId instead of followingId
+    const qb = UserRepository.createQueryBuilder("u")
+        // mutual follow condition
         .innerJoin("Follow", "f1", "f1.followerId = :userId AND f1.followedUserId = u.id")
         .innerJoin("Follow", "f2", "f2.followerId = u.id AND f2.followedUserId = :userId")
         .leftJoin("u.locationPrivacy", "lp")
@@ -97,14 +103,16 @@ const getNearbyFriends = async (lat: number, lng: number, radius: number, userId
             "u.userName AS userName",
             "u.profileImageUrl AS profileImageUrl",
             "u.latitude AS latitude",
-            "u.longitude AS longitude",
-            "lp.mode AS privacyMode",
+            "u.longitude AS longitude"
         ])
         .addSelect(`${distExpr}`, "distance_km")
-        .where("lp.isSharingEnabled = true")
+        // only users within given radius
         .andWhere(`${distExpr} <= :radius`, { radius })
         .setParameters({ lat, lng, userId })
-        .getRawMany();
+        .orderBy("distance_km", "ASC");
+
+    const friends = await qb.getRawMany();
+    return friends;
 };
 
 export const getNearbyUsers = async ({ latitude, longitude, radius, }: ChoiceMapInput) => {

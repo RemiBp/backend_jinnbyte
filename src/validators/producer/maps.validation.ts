@@ -11,11 +11,10 @@ export const NearbyProducersSchema = z.object({
     latitude: z.coerce.number(),
     longitude: z.coerce.number(),
     radius: z.coerce.number().default(5),
-    type: z.nativeEnum(ProducerType).optional(),
+    type: z.nativeEnum(ProducerType).default(ProducerType.ALL),
     sort: z.nativeEnum(SortOption).default(SortOption.DISTANCE),
     limit: z.coerce.number().default(30),
     page: z.coerce.number().default(1),
-    view: z.enum(["all", "friends", "producers"]).default("all"),
 
     // Restaurant filters
     cuisine: z.string().optional(),
