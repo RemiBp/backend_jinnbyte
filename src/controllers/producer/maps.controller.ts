@@ -5,8 +5,9 @@ import { Request, Response, NextFunction } from 'express';
 
 export const getNearbyProducers = async (req: Request, res: Response, next: NextFunction) => {
     try {
+        const userId = req.userId;
         const input = NearbyProducersSchema.parse(req.query);
-        const data = await MapsService.getNearbyProducers(input);
+        const data = await MapsService.getNearbyProducers(userId, input);
         return sendApiResponse(res, 200, "Nearby producers fetched", data);
     } catch (err) {
         next(err);

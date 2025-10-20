@@ -1,5 +1,6 @@
 
 export enum ProducerType {
+    ALL = "all",
     RESTAURANT = "restaurant",
     LEISURE = "leisure",
     WELLNESS = "wellness",

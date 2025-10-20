@@ -1,13 +1,13 @@
 import { Router } from 'express';
-import { authenticateJWTForBooking, checkStatus } from '../../middlewares/post.auth.middleware';
 import { MapsController } from '../../controllers/producer/maps.controller';
+import { authenticateBothJWT, checkStatus } from '../../middlewares/auth.middleware';
 
 const UserMapRouter = Router();
 UserMapRouter.get('/', (req, res) => {
     res.send('Hit Create Map route');
 });
 
-UserMapRouter.use(authenticateJWTForBooking);
+UserMapRouter.use(authenticateBothJWT);
 UserMapRouter.use(checkStatus);
 
 UserMapRouter.get('/getNearbyProducers', MapsController.getNearbyProducers);

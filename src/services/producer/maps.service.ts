@@ -14,9 +14,17 @@ import { ChoiceMapInput, createOfferInput, GetFilteredRestaurantsInput, GetProdu
 
 const EARTH_RADIUS_KM = 6371;
 
-export const getNearbyProducers = async (data: NearbyProducersInput) => {
-    const { latitude, longitude, radius, type, limit = 30, page = 1, sort } = data;
+export const getNearbyProducers = async (userId: number, data: NearbyProducersInput) => {
+    const { latitude, longitude, radius, type, limit, page, sort, view } = data;
 
+    //View = "friends" only
+    if (view === "friends") {
+        if (!userId) throw new Error("userId is required to fetch nearby friends");
+        const friends = await getNearbyFriends(latitude, longitude, radius, userId);
+        return friends;
+    }
+
+    // Producers (default)
     const distExpr = `${EARTH_RADIUS_KM} * 2 * ASIN(SQRT(
     POWER(SIN(RADIANS(:lat - p.latitude) / 2), 2) +
     COS(RADIANS(:lat)) * COS(RADIANS(p.latitude)) *
@@ -40,27 +48,63 @@ export const getNearbyProducers = async (data: NearbyProducersInput) => {
         .offset((page - 1) * limit)
         .limit(limit);
 
+    // Type filtering (same as old logic, now "all" safe)
     if (type) {
-        qb.andWhere("p.type = :type", { type });
+        qb.andWhere("(:type = 'all' OR p.type::text = :type)", { type });
 
         const filterAppliers = {
-            "restaurant": applyRestaurantFilters,
-            "leisure": applyLeisureFilters,
-            "wellness": applyWellnessFilters,
+            restaurant: applyRestaurantFilters,
+            leisure: applyLeisureFilters,
+            wellness: applyWellnessFilters,
         };
 
-        if (type && type in filterAppliers) {
-            filterAppliers[type](qb, data);
+        // Apply producer-type specific filters
+        if (filterAppliers[type as keyof typeof filterAppliers]) {
+            filterAppliers[type as keyof typeof filterAppliers](qb, data);
         }
     }
 
-    if (sort === "rating") {
-        qb.orderBy("p.globalRating", "DESC");
-    } else {
-        qb.orderBy("distance_km", "ASC");
+    // Sorting logic
+    if (sort === "rating") qb.orderBy("p.globalRating", "DESC");
+    else qb.orderBy("distance_km", "ASC");
+
+    const producers = await qb.getRawMany();
+
+    // View = "all" → friends + producers merged
+    if (view === "all" && userId) {
+        const friends = await getNearbyFriends(latitude, longitude, radius, userId);
+        return { producers, friends };
     }
 
-    return qb.getRawMany();
+    return producers;
+};
+
+const getNearbyFriends = async (lat: number, lng: number, radius: number, userId: number) => {
+    const distExpr = `${EARTH_RADIUS_KM} * 2 * ASIN(SQRT(
+    POWER(SIN(RADIANS(:lat - u.latitude) / 2), 2) +
+    COS(RADIANS(:lat)) * COS(RADIANS(u.latitude)) *
+    POWER(SIN(RADIANS(:lng - u.longitude) / 2), 2)
+  ))`;
+
+    return await UserRepository.createQueryBuilder("u")
+        // Fixed: Use followedUserId instead of followingId
+        .innerJoin("Follow", "f1", "f1.followerId = :userId AND f1.followedUserId = u.id")
+        .innerJoin("Follow", "f2", "f2.followerId = u.id AND f2.followedUserId = :userId")
+        .leftJoin("u.locationPrivacy", "lp")
+        .select([
+            "u.id AS id",
+            "u.fullName AS fullName",
+            "u.userName AS userName",
+            "u.profileImageUrl AS profileImageUrl",
+            "u.latitude AS latitude",
+            "u.longitude AS longitude",
+            "lp.mode AS privacyMode",
+        ])
+        .addSelect(`${distExpr}`, "distance_km")
+        .where("lp.isSharingEnabled = true")
+        .andWhere(`${distExpr} <= :radius`, { radius })
+        .setParameters({ lat, lng, userId })
+        .getRawMany();
 };
 
 export const getNearbyUsers = async ({ latitude, longitude, radius, }: ChoiceMapInput) => {
