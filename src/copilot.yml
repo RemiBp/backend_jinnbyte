@@ -4,10 +4,10 @@ version: 1.0.0
 
 tools:
   - name: find_nearby_restaurants
-    description: Find nearby restaurants filtered by cuisine or location.
+    description: Find nearby restaurants filtered by location.
     parameters:
-      cuisine: string
       latitude: number
       longitude: number
       radius_km: number
-    endpoint: /v1/producer/nearby
+      type: string
+    endpoint: /api/app/maps/getNearbyProducers
