@@ -1,88 +1,74 @@
+// src/mcp/agent.ts
 import OpenAI from "openai";
-import { loadMCPConfig } from "./registry";
-import { findNearbyRestaurants } from "./tool";
+import { Agent, run, system, user } from "@openai/agents";
+import { setDefaultOpenAIClient, OpenAIResponsesModel } from "@openai/agents-openai";
+import { findNearbyRestaurants, findTopRatedNearby } from "./tool";
 
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY! });
-const config = loadMCPConfig();
+setDefaultOpenAIClient(openai);
 
-const toolRegistry: Record<string, Function> = {
-    find_nearby_restaurants: findNearbyRestaurants,
+const AGENT_CONFIG = {
+    name: "ChoiceApp Copilot",
+    instructions: [
+        "You are the official AI Copilot for ChoiceApp.",
+        "CRITICAL: If the user asks for restaurants, MUST call one of:",
+        "  - find_nearby_restaurants (for general nearby)",
+        "  - find_top_rated_nearby (when the user mentions 'top', 'best', 'highest rated')",
+        "Parameter filling rules:",
+        "  - latitude := user context JSON at coords.latitude",
+        "  - longitude := user context JSON at coords.longitude",
+        "  - radius_km := (user context radius_km) OR default 5",
+        "If any of latitude/longitude missing, respond asking the app to provide coords.",
+        "Return the tool output directly as JSON: { message: string, data: any }.",
+    ].join("\n"),
+    toolUseBehavior: { stopAtToolNames: ["find_nearby_restaurants", "find_top_rated_nearby"] },
+    model: new OpenAIResponsesModel(openai, "gpt-4.1-mini"),
+    tools: [findNearbyRestaurants, findTopRatedNearby],
 };
 
-interface CopilotContext {
-    userId: number;
-    role: string;
-    coords?: { latitude: number; longitude: number };
+const agent = new Agent(AGENT_CONFIG);
+
+function parseAgentResponse(response: unknown): { message: string; data: any } {
+    if (response && typeof response === "object") {
+        const r: any = response;
+        if (typeof r.message === "string" && "data" in r) return r;
+        return { message: JSON.stringify(r), data: null };
+    }
+    if (typeof response === "string") {
+        const s = response.trim();
+        try { return JSON.parse(s); } catch { return { message: s || "No structured response", data: null }; }
+    }
+    return { message: "No structured response", data: null };
 }
 
-export const CopilotMCPAgent = {
-    async run(query: string, ctx: CopilotContext) {
-        const systemPrompt = `You are the ChoiceApp AI Copilot.
+export const CopilotAgent = {
+    instance: agent,
 
-Be short, friendly, and natural — like a chat companion.
-When tools are used, summarize results in 1–2 sentences max.
+    async handle(query: string, context: Record<string, any>) {
+        const systemPrompt = [
+            "You are the ChoiceApp Copilot.",
+            "User context (JSON):",
+            JSON.stringify(context, null, 2),
+        ].join("\n");
 
-Tools available:
-${config.tools.map(t => `- ${t.name}: ${t.description}`).join("\n")}
+        console.log(`🧠 [Copilot] Incoming query: "${query}"`);
+        console.log("🗺️  Context coords:", context?.coords);
 
-If the user asks about restaurants or nearby food, use "find_nearby_restaurants".
-Return only JSON:
-{"tool":"find_nearby_restaurants","params":{...}} or {"tool":"none"}.
-`;
+        const result = await run(agent, [system(systemPrompt), user(query)]);
 
-        // Decide whether to use a tool
-        const completion = await openai.chat.completions.create({
-            model: "gpt-4o-mini",
-            temperature: 0.2,
-            response_format: { type: "json_object" },
-            messages: [
-                { role: "system", content: systemPrompt },
-                { role: "user", content: query },
-            ],
-        });
-
-        let parsed: any;
-        try {
-            parsed = JSON.parse(completion.choices[0].message?.content || "{}");
-        } catch {
-            parsed = { tool: "none" };
+        const toolRuns = (result as any)?.toolRuns;
+        if (toolRuns?.length) {
+            console.log("⚙️  Tools executed:");
+            for (const runInfo of toolRuns) {
+                console.log(`➡️  Tool: ${runInfo.toolName} | Duration: ${(runInfo.durationMs / 1000).toFixed(2)}s`);
+                console.log("📦  Params:", runInfo.parameters);
+            }
+        } else {
+            console.log("ℹ️  No tool executed, responded conversationally.");
         }
 
-        // If tool detected, run it
-        if (parsed.tool && parsed.tool !== "none") {
-            const fn = toolRegistry[parsed.tool];
-            if (!fn) throw new Error(`No implementation for ${parsed.tool}`);
-
-            const params = {
-                latitude: ctx.coords?.latitude ?? 31.5204,
-                longitude: ctx.coords?.longitude ?? 74.3587,
-                radius_km: parsed.params?.radius_km ?? 10,
-                ...parsed.params,
-            };
-
-            const data = await fn(params);
-
-            // short message response for frontend
-            return {
-                tool: parsed.tool,
-                message: `Here are some restaurants near you 🍽️`,
-                data,
-            };
-        }
-
-        // If no tool, just chat naturally
-        const fallback = await openai.chat.completions.create({
-            model: "gpt-4o-mini",
-            temperature: 0.6,
-            messages: [
-                { role: "system", content: "You are a friendly, short-reply AI Copilot." },
-                { role: "user", content: query },
-            ],
-        });
-
-        return {
-            tool: "none",
-            message: fallback.choices[0].message?.content?.trim() ?? "I'm here to help!",
-        };
+        // Prefer the tool's final output when short-circuited
+        const final = (result as any)?.finalToolOutput ?? (result as any)?.finalOutput ?? "";
+        return parseAgentResponse(final);
     },
 };

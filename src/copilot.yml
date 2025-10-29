@@ -9,5 +9,25 @@ tools:
       latitude: number
       longitude: number
       radius_km: number
-      type: string
     endpoint: /api/app/maps/getNearbyProducers
+    method: GET
+    response:
+      success: boolean
+      message: string
+      items: []
+      pagination: object
+
+  - name: find_top_rated_nearby
+    description: Show top-rated restaurants and wellness services near the user.
+    parameters:
+      latitude: number
+      longitude: number
+      radius_km: number
+    endpoint: /api/app/maps/getNearbyProducers
+    method: GET
+    response:
+      success: boolean
+      message: string
+      data:
+        restaurants: []
+        wellness: []
