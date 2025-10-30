@@ -1,6 +1,7 @@
 import { NextFunction, Request, Response } from 'express';
 import {
   accountDeleteSchema,
+  GetMyFriendsSchema,
   presignedURLSchema,
   updateProfileSchema,
 } from '../../validators/app/user.profile.validation';
@@ -73,6 +74,17 @@ export const deleteProfile = async (req: Request, res: Response, next: NextFunct
     const result = await ProfileService.deleteProfile(userId);
 
     return sendApiResponse(res, 200, 'Profile deleted successfully', result);
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const getMyFollowers = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const userId = Number(req.userId);
+
+    const data = await ProfileService.getMyFollowers(userId);
+    return sendApiResponse(res, 200, "Followers fetched successfully", data);
   } catch (error) {
     next(error);
   }
