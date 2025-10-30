@@ -40,7 +40,7 @@ const AGENT_CONFIG = {
             "find_restaurant_posts",
             "friends_posts_this_week",
             "find_events_this_weekend_by_location",
-            "check_restaurant_availability",
+            "find_most_visited_restaurants",
             "check_restaurant_availability",
             "find_open_wellness_studios"
         ],
