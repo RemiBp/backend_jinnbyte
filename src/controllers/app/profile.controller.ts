@@ -1,6 +1,7 @@
 import { NextFunction, Request, Response } from 'express';
 import {
   accountDeleteSchema,
+  GetMyFriendsSchema,
   presignedURLSchema,
   UpdateLocationPrivacySchema,
   updateProfileSchema,
@@ -10,12 +11,25 @@ import { BadRequestError } from '../../errors/badRequest.error';
 import { GetUserDetailSchema, SearchUsersSchema } from '../../validators/producer/post.validation';
 import { sendApiResponse } from '../../utils/sendApiResponse';
 import { LocationPrivacyRepository } from '../../repositories';
+import { updatePasswordSchema } from '../../validators/producer/profile.validation';
 
 export const updateProfile = async (req: Request, res: Response, next: NextFunction) => {
   try {
     const validatedObject = updateProfileSchema.parse(req.body);
     const userId = Number(req.userId);
     const response = await ProfileService.updateProfile(userId, validatedObject);
+    res.status(200).json(response);
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const updatePassword = async (req: Request,res: Response,next: NextFunction) => {
+  try {
+    const validatedData = updatePasswordSchema.parse(req.body);
+    const userId = Number(req.userId);
+
+    const response = await ProfileService.updatePassword(userId, validatedData);
     res.status(200).json(response);
   } catch (error) {
     next(error);
@@ -62,6 +76,17 @@ export const deleteProfile = async (req: Request, res: Response, next: NextFunct
     const result = await ProfileService.deleteProfile(userId);
 
     return sendApiResponse(res, 200, 'Profile deleted successfully', result);
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const getMyFollowers = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const userId = Number(req.userId);
+
+    const data = await ProfileService.getMyFollowers(userId);
+    return sendApiResponse(res, 200, "Followers fetched successfully", data);
   } catch (error) {
     next(error);
   }

@@ -14,10 +14,12 @@ UserProfileRouter.use(authenticateUserJWT);
 UserProfileRouter.use(checkStatus);
 
 UserProfileRouter.put('/updateProfile', ProfileController.updateProfile);
+UserProfileRouter.patch('/updatePassword', ProfileController.updatePassword);
 UserProfileRouter.get('/getProfile', ProfileController.getProfile);
 UserProfileRouter.get('/searchUsers', attachBlockedUsers, ProfileController.searchUsers);
 UserProfileRouter.get('/getUserDetail/:userId', attachBlockedUsers, ProfileController.getUserDetail);
 UserProfileRouter.delete('/deleteProfile', ProfileController.deleteProfile);
+UserProfileRouter.get('/getMyFollowers', ProfileController.getMyFollowers);
 
 UserProfileRouter.post('/getPreSignedUrlForProfileImage', ProfileController.getPreSignedUrlForProfileImage);
 UserProfileRouter.post('/changeCurrentPassword', ProfileController.changeCurrentPassword);

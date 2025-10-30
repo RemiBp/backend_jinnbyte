@@ -10,4 +10,12 @@ export enum NotificationTypeEnums {
   BOOKING_UPDATED = 'bookingUpdated',
   CHAT_MESSAGE = 'chatMessage',
   OFFER = "OFFER",
+
+  // Interest Flow
+  INTEREST_INVITE = 'interestInvite',
+  INTEREST_ACCEPTED = 'interestAccepted',
+  INTEREST_DECLINED = 'interestDeclined',
+  INTEREST_SUGGESTED_NEW_TIME = 'interestSuggestedNewTime',
+  INTEREST_SLOT_UPDATED = 'interestSlotUpdated',
+  INTEREST_CONFIRMED = 'interestConfirmed',
 }
