@@ -10,6 +10,10 @@ import {
     EventRatingRepository,
     DishRatingRepository,
     ReviewRepository,
+    LeisureRepository,
+    WellnessRepository,
+    RestaurantRatingRepository,
+    ProducerRepository
 } from "../../repositories";
 import { BadRequestError } from "../../errors/badRequest.error";
 import { NotFoundError } from "../../errors/notFound.error";
@@ -20,6 +24,7 @@ import Interest from "../../models/Interest";
 import EventEntity from "../../models/Event";
 import { InviteStatus } from "../../enums/inviteStatus.enum";
 import PostStatistics from "../../models/PostStatistics";
+import { avgOverallForMonthRepo } from "../../utils/avgOverallForMonthRepo";
 
 type ReferralRow = {
     bookingId: number;
@@ -246,61 +251,14 @@ export const getFriendReferralBookings = async (producerId: number) => {
     return data;
 };
 
-import { ProducerRepository } from "../../repositories";
-
-import RestaurantRating from "../../models/RestaurantRating";
-import Wellness from "../../models/Wellness";
-import Leisure from "../../models/Leisure";
-import PostgresDataSource from "../../data-source";
-
-type MonthlyAvg = { averageRating: number };
-
-// AVG(overall) with month filter; falls back to current overall if no rows in month.
-async function avgOverallForMonth<T>(
-    entity: { new(): T },
-    tableAlias: string,
-    producerId: number,
-    from: Date,
-    to: Date
-): Promise<number> {
-    // Try monthly average (created OR updated in the window)
-    const monthly = await PostgresDataSource.getRepository(entity)
-        .createQueryBuilder(tableAlias)
-        .select(`AVG(CAST(${tableAlias}.overall AS numeric))`, "avg")
-        .where(`${tableAlias}."producerId" = :producerId`, { producerId })
-        .andWhere(`(${tableAlias}."createdAt" BETWEEN :from AND :to OR ${tableAlias}."updatedAt" BETWEEN :from AND :to)`,
-            { from, to }
-        )
-        .getRawOne();
-
-    if (monthly?.avg != null) {
-        const n = typeof monthly.avg === "string" ? parseFloat(monthly.avg) : Number(monthly.avg);
-        if (Number.isFinite(n)) return n;
-    }
-
-    // Fallback: current overall (useful if table is 1 row per producer)
-    const current = await PostgresDataSource.getRepository(entity)
-        .createQueryBuilder(tableAlias)
-        .select(`CAST(${tableAlias}.overall AS numeric)`, "val")
-        .where(`${tableAlias}."producerId" = :producerId`, { producerId })
-        .getRawOne();
-
-    if (current?.val != null) {
-        const n = typeof current.val === "string" ? parseFloat(current.val) : Number(current.val);
-        if (Number.isFinite(n)) return n;
-    }
-
-    return 0;
-}
-
-export const getMonthlyAverageRating = async (producerId: number): Promise<MonthlyAvg> => {
+export const getMonthlyAverageRating = async (producerId: number) => {
     if (!producerId) throw new BadRequestError("Producer ID is required");
 
     const producer = await ProducerRepository.findOne({ where: { id: producerId } });
     if (!producer) throw new BadRequestError("Producer not found");
 
-    // Adjust per your schema: producer.type / producer.producerType / serviceType, etc.
-    const pType: string = (producer as any).type || (producer as any).producerType || "";
+    const type: string =
+        (producer as any).type || (producer as any).producerType || (producer as any).serviceType || "";
 
     const now = new Date();
     const from = startOfMonth(now);
@@ -308,18 +266,17 @@ export const getMonthlyAverageRating = async (producerId: number): Promise<Month
 
     let avg = 0;
 
-    switch (pType.toLowerCase()) {
+    switch (type.toLowerCase()) {
         case "restaurant":
-            avg = await avgOverallForMonth(RestaurantRating, "rr", producerId, from, to);
+            avg = await avgOverallForMonthRepo(RestaurantRatingRepository, "rr", producerId, from, to);
             break;
         case "wellness":
-            avg = await avgOverallForMonth(Wellness, "w", producerId, from, to);
+            avg = await avgOverallForMonthRepo(WellnessRepository, "w", producerId, from, to);
             break;
         case "leisure":
-            avg = await avgOverallForMonth(Leisure, "l", producerId, from, to);
+            avg = await avgOverallForMonthRepo(LeisureRepository, "l", producerId, from, to);
             break;
         default:
-            // Unknown type → safe default
             avg = 0;
     }
 
@@ -385,66 +342,91 @@ export const getCustomersByRating = async (producerId: number, rating: number) =
     return data;
 };
 
-// Escape % and _ for ILIKE
-function escapeLike(raw: string) {
-    return raw.replace(/[%_\\]/g, (m) => "\\" + m);
-}
-
-export const searchReviewsByKeyword = async (producerId: number, keyword: string) => {
-    if (!producerId) throw new BadRequestError("Producer ID is required");
-    if (!keyword || keyword.trim().length < 2)
-        throw new BadRequestError("Keyword must be at least 2 characters long");
-
-    const kw = `%${escapeLike(keyword.trim())}%`;
-
-    // 🍽️ Restaurant/Wellness reviews via Booking → Producer(userId) mapping
-    const restaurant: Row[] = await ReviewRepository
-        .createQueryBuilder("rev")
-        .innerJoin("rev.booking", "b") // assumes Review.booking relation exists
-        .innerJoin(Producer, "p", "p.userId = b.restaurantId AND p.id = :producerId", { producerId })
-        .leftJoin(User, "u", "u.id = b.customerId")
-        .where("rev.comment ILIKE :kw ESCAPE '\\'", { kw })
-        // Handle rating column naming differences (overall | rating | stars)
-        .select([
-            "rev.id AS reviewId",
-            "rev.comment AS comment",
-            "COALESCE(rev.overall, rev.rating, rev.stars) AS rating",
-            "COALESCE(u.fullName, 'Unknown') AS userName",
-            "rev.createdAt AS date",
-        ])
-        .orderBy("rev.createdAt", "DESC")
-        .limit(50)
-        .getRawMany();
-
-    // 🎟️ Event reviews (optional) — only include if you actually have Review ↔ EventBooking relation
-    let events: Row[] = [];
-    try {
-        events = await ReviewRepository
-            .createQueryBuilder("rev")
-            .innerJoin("rev.eventBooking", "eb") // if your Review has this relation
-            .innerJoin(EventEntity, "e", "e.id = eb.eventId AND e.producerId = :producerId", { producerId })
-            .leftJoin(User, "eu", "eu.id = eb.userId")
-            .where("rev.comment ILIKE :kw ESCAPE '\\'", { kw })
-            .select([
-                "rev.id AS reviewId",
-                "rev.comment AS comment",
-                "COALESCE(rev.overall, rev.rating, rev.stars) AS rating",
-                "COALESCE(eu.fullName, 'Unknown') AS userName",
-                "rev.createdAt AS date",
-            ])
-            .orderBy("rev.createdAt", "DESC")
-            .limit(50)
-            .getRawMany();
-    } catch {
-        events = [];
+type RatingBreakdown =
+    | {
+        type: "restaurant";
+        overall: number;
+        criteria: { service: number; place: number; portions: number; ambiance: number };
+        updatedAt: Date | null;
     }
+    | {
+        type: "wellness";
+        overall: number;
+        criteria: {
+            careQuality: number; cleanliness: number; welcome: number;
+            valueForMoney: number; atmosphere: number; staffExperience: number;
+        };
+        updatedAt: Date | null;
+    }
+    | {
+        type: "leisure";
+        overall: number;
+        criteria: { stageDirection: number; actorPerformance: number; textQuality: number; scenography: number };
+        updatedAt: Date | null;
+    };
 
-    // Merge & cap
-    const data = [...restaurant, ...events]
-        .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
-        .slice(0, 50);
+const toNum = (v: any) => (v == null ? 0 : typeof v === "string" ? parseFloat(v) : Number(v));
 
-    return data; // [] when none
+export const getRatingBreakdown = async (producerId: number): Promise<RatingBreakdown | null> => {
+    if (!producerId) throw new BadRequestError("Producer ID is required");
+
+    const producer = await ProducerRepository.findOne({ where: { id: producerId } });
+    if (!producer) throw new BadRequestError("Producer not found");
+
+    const pType: string =
+        (producer as any).type || (producer as any).producerType || (producer as any).serviceType || "";
+
+    switch (pType.toLowerCase()) {
+        case "restaurant": {
+            const row = await RestaurantRatingRepository.findOne({ where: { producerId } });
+            if (!row) return null;
+            return {
+                type: "restaurant",
+                overall: toNum(row.overall),
+                criteria: {
+                    service: toNum(row.service),
+                    place: toNum(row.place),
+                    portions: toNum(row.portions),
+                    ambiance: toNum(row.ambiance),
+                },
+                updatedAt: row.updatedAt ?? null,
+            };
+        }
+        case "wellness": {
+            const row = await WellnessRepository.findOne({ where: { producerId } });
+            if (!row) return null;
+            return {
+                type: "wellness",
+                overall: toNum(row.overall),
+                criteria: {
+                    careQuality: toNum(row.careQuality),
+                    cleanliness: toNum(row.cleanliness),
+                    welcome: toNum(row.welcome),
+                    valueForMoney: toNum(row.valueForMoney),
+                    atmosphere: toNum(row.atmosphere),
+                    staffExperience: toNum(row.staffExperience),
+                },
+                updatedAt: row.updatedAt ?? null,
+            };
+        }
+        case "leisure": {
+            const row = await LeisureRepository.findOne({ where: { producerId } });
+            if (!row) return null;
+            return {
+                type: "leisure",
+                overall: toNum(row.overall),
+                criteria: {
+                    stageDirection: toNum(row.stageDirection),
+                    actorPerformance: toNum(row.actorPerformance),
+                    textQuality: toNum(row.textQuality),
+                    scenography: toNum(row.scenography),
+                },
+                updatedAt: row.updatedAt ?? null,
+            };
+        }
+        default:
+            return null;
+    }
 };
 
 export * as ProducerInsightsService from "./insights.service";

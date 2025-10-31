@@ -253,26 +253,23 @@ tools:
           comment: string
           date: string
 
-  - name: search_reviews_by_keyword
-    description: "Search reviews for mentions of a keyword (e.g., 'food', 'service', 'ambience')."
+  - name: get_rating_breakdown
+    description: "Return the current overall rating and criteria breakdown for the producer, based on its type."
     parameters:
     type: object
-    required: [producerId, keyword]
+    required: [producerId]
     properties:
       producerId:
         type: number
         description: "The ID of the producer."
-      keyword:
-        type: string
-        description: "Keyword to search for within review comments."
-    endpoint: /api/app/producer/insights/search-reviews
+    endpoint: /api/app/producer/insights/rating-breakdown
     method: GET
     response:
     success: boolean
     message: string
     data:
-      - reviewId: number
-        userName: string
-        rating: number
-        comment: string
-        date: string
+      type: string   # restaurant | wellness | leisure | null
+      overall: number
+      criteria: object
+      updatedAt: string
+

@@ -17,7 +17,7 @@ import {
     getFriendReferralBookings,
     getMonthlyAverageRating,
     getCustomersByRating,
-    searchReviewsByKeyword,
+    getRatingBreakdown,
 } from "./tool";
 
 
@@ -99,7 +99,7 @@ const AGENT_CONFIG = {
         getFriendReferralBookings,
         getMonthlyAverageRating,
         getCustomersByRating,
-        searchReviewsByKeyword,
+        getRatingBreakdown,
     ],
 };
 

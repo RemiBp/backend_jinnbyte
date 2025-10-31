@@ -1,4 +1,3 @@
-// src/mcp/tool.ts
 import { tool } from "@openai/agents";
 import { z } from "zod";
 import { getNearbyProducers } from "../services/producer/maps.service";
@@ -238,19 +237,21 @@ export const getCustomersByRating = tool({
     },
 });
 
-export const searchReviewsByKeyword = tool({
-    name: "search_reviews_by_keyword",
-    description: "Search reviews for mentions of a keyword (e.g., 'food', 'service', 'ambience').",
+export const getRatingBreakdown = tool({
+    name: "get_rating_breakdown",
+    description: "Return the current overall rating and criteria breakdown for the producer, based on its type (restaurant, wellness, leisure).",
     parameters: z.object({
         producerId: z.number(),
-        keyword: z.string().min(2),
     }),
-    async execute({ producerId, keyword }) {
-        try {
-            return await ProducerInsightsService.searchReviewsByKeyword(producerId, keyword);
-        } catch {
-            // Return empty list on any "no results" style error
-            return [];
+    async execute({ producerId }) {
+        const res = await ProducerInsightsService.getRatingBreakdown(producerId);
+        // Always return a safe shape
+        if (!res) {
+            return { type: null, overall: 0, criteria: {}, updatedAt: null };
         }
+        // Normalize numbers to 1 decimal place if you prefer
+        const oneDec = (n: number) => Number.isFinite(n) ? parseFloat(n.toFixed(1)) : 0;
+        const criteria = Object.fromEntries(Object.entries(res.criteria).map(([k, v]) => [k, oneDec(v as number)]));
+        return { type: res.type, overall: oneDec(res.overall), criteria, updatedAt: res.updatedAt };
     },
 });
