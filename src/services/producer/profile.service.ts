@@ -950,7 +950,7 @@ type SlotUpdateInput = {
 export const updateRestaurantSlots = async (userId: number, slots: SlotUpdateInput[]) => {
   try {
     if (!Array.isArray(slots) || slots.length === 0) {
-      throw new Error('Invalid input: slots array is required');
+      throw new Error('slots array is required');
     }
 
     const updatedSlots = [];
@@ -966,7 +966,7 @@ export const updateRestaurantSlots = async (userId: number, slots: SlotUpdateInp
       }
 
       if (existingSlot.user.id !== userId) {
-        throw new Error(`Slot with ID ${slot.id} does not belong to the specified restaurant`);
+        throw new Error(`Slot with ID ${slot.id} does not belong to this restaurant`);
       }
 
       existingSlot.isActive = slot.isActive;
