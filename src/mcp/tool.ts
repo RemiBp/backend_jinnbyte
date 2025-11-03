@@ -6,14 +6,15 @@ import { ProducerInsightsService } from "../services/producer/insights.service";
 
 const hasNumber = (v: unknown) => typeof v === "number" && Number.isFinite(v);
 
-// User side Tools
+// USER SIDE TOOLS
+
 export const findNearbyRestaurants = tool({
     name: "find_nearby_restaurants",
     description: "Find nearby restaurants based on user's location.",
     parameters: z.object({
-        latitude: z.number(),
-        longitude: z.number(),
-        radius_km: z.number().default(10),
+        latitude: z.number().min(-90).max(90),
+        longitude: z.number().min(-180).max(180),
+        radius_km: z.number().min(0.1).max(50).default(10),
     }),
     async execute({ latitude, longitude, radius_km }) {
         if (!hasNumber(latitude) || !hasNumber(longitude)) {
@@ -83,13 +84,20 @@ export const findRestaurantPosts = tool({
     name: "find_restaurant_posts",
     description: "Fetch all posts made by a specific restaurant.",
     parameters: z.object({
-        restaurantName: z.string().describe("The name of the restaurant."),
+        restaurantName: z.string().min(1, "Restaurant name is required."),
         limit: z.number().optional().default(10),
         page: z.number().optional().default(1),
     }),
-    execute: async ({ restaurantName, page, limit }) => {
-        const result = await ProducerInsightsService.getPostsByRestaurant(restaurantName, page, limit);
-        return { message: result.message, data: result.data };
+    async execute({ restaurantName, page, limit }) {
+        try {
+            const result = await ProducerInsightsService.getPostsByRestaurant(restaurantName, page, limit);
+            if (!result?.data || result.data.length === 0) {
+                return { message: `No posts found for '${restaurantName}'.`, data: [] };
+            }
+            return { message: result.message, data: result.data };
+        } catch {
+            return { message: `No restaurant found with the name '${restaurantName}'.`, data: [] };
+        }
     },
 });
 
@@ -99,7 +107,7 @@ export const friendsPostsThisWeek = tool({
     parameters: z.object({
         userId: z.number().describe("The ID of the user making the query"),
     }),
-    execute: async ({ userId }) => {
+    async execute({ userId }) {
         const result = await ProducerInsightsService.getFriendsWhoPostedThisWeek(userId);
         return { message: result.message, data: result.data };
     },
@@ -107,8 +115,7 @@ export const friendsPostsThisWeek = tool({
 
 export const findMostVisitedRestaurants = tool({
     name: "find_most_visited_restaurants",
-    description:
-        "Find the most visited restaurants based on how many people made Choice posts there.",
+    description: "Find the most visited restaurants based on how many people made Choice posts there.",
     parameters: z.object({
         limit: z.number().default(10).describe("Maximum number of restaurants to return"),
     }),
@@ -122,25 +129,21 @@ export const checkRestaurantAvailability = tool({
     name: "check_restaurant_availability",
     description: "Check available slots for a specific restaurant name.",
     parameters: z.object({
-        restaurant_name: z
-            .string()
-            .min(1, "Restaurant name is required")
-            .describe("The name of the restaurant whose availability should be checked."),
+        restaurant_name: z.string().min(1, "Restaurant name is required"),
     }),
     async execute({ restaurant_name }) {
         try {
             const result = await ProducerInsightsService.getProducerAvailabilityByName(restaurant_name);
-
-            return {
-                message: result.message,
-                data: result.data,
-            };
+            if (!result?.data || result.data.length === 0) {
+                return { message: `No availability found for '${restaurant_name}'.`, data: [] };
+            }
+            return { message: result.message, data: result.data };
         } catch (error: any) {
-            console.error("Error in check_restaurant_availability:", error);
-            return {
-                message: `Failed to check availability for '${restaurant_name}'.`,
-                data: null,
-            };
+            const msg = String(error?.message || error);
+            if (msg.includes("not found")) {
+                return { message: `No restaurant found with the name '${restaurant_name}'.`, data: [] };
+            }
+            return { message: `Failed to check availability for '${restaurant_name}'.`, data: null };
         }
     },
 });
@@ -148,34 +151,39 @@ export const checkRestaurantAvailability = tool({
 export const findOpenWellnessStudios = tool({
     name: "find_open_wellness_studios",
     description: "List all wellness studios that are currently open (based on UTC time).",
-    parameters: z.object({}), // no parameters needed
+    parameters: z.object({}),
     async execute() {
         try {
             const result = await ProducerInsightsService.getOpenWellnessStudios();
-
-            return {
-                message: result.message,
-                data: result.data,
-            };
-        } catch (error: any) {
-            console.error("Error in find_open_wellness_studios:", error);
-            return {
-                message: "Failed to fetch open wellness studios.",
-                data: null,
-            };
+            return { message: result.message, data: result.data };
+        } catch {
+            return { message: "Failed to fetch open wellness studios.", data: null };
         }
     },
 });
 
-// Producer side Tools
+// PRODUCER SIDE TOOLS
+
 export const getMostEngagedItems = tool({
     name: "get_most_engaged_items",
     description: "Find which dishes, activities, or services have the highest engagement (likes, bookings, or posts).",
     parameters: z.object({
-        producerId: z.number().describe("Producer ID whose items to analyze."),
+        producerId: z.number(),
     }),
     async execute({ producerId }) {
-        return await ProducerInsightsService.getMostEngagedItems(producerId);
+        try {
+            const result = await ProducerInsightsService.getMostEngagedItems(producerId);
+            return result;
+        } catch (error: any) {
+            const msg = String(error?.message || error);
+            if (msg.includes("No engagement data") || msg.includes("not found")) {
+                return {
+                    message: "You don't have any engagement data yet. Start by adding menu items or services to track engagement!",
+                    data: [],
+                };
+            }
+            return { message: "Failed to fetch engagement data. Please try again later.", data: null };
+        }
     },
 });
 
@@ -184,37 +192,62 @@ export const getUpcomingBookings = tool({
     description: "Check all upcoming bookings for the given producer and optional date/time.",
     parameters: z.object({
         producerId: z.number(),
-        date: z.string().datetime().nullable(),
+        date: z.string().datetime().nullable().optional(),
     }),
     async execute({ producerId, date }) {
         try {
-            return await ProducerInsightsService.getUpcomingBookings(producerId, date ?? null);
+            const result = await ProducerInsightsService.getUpcomingBookings(producerId, date ?? null);
+            return result;
         } catch (e: any) {
             const msg = String(e?.message || e);
-            if (msg.includes("No upcoming bookings")) return [];
-            throw e;
+            if (msg.includes("No upcoming bookings") || msg.includes("not found") || msg.includes("No bookings")) {
+                return { message: "You don't have any upcoming bookings at the moment.", data: [] };
+            }
+            return { message: "Failed to fetch upcoming bookings. Please try again later.", data: null };
         }
     },
 });
 
 export const getFriendReferralBookings = tool({
     name: "get_friend_referral_bookings",
-    description: "List customers who booked through a friend’s referral (interest creator ≠ booking user).",
+    description: "List customers who booked through a friend's referral.",
     parameters: z.object({
         producerId: z.number(),
     }),
     async execute({ producerId }) {
-        return await ProducerInsightsService.getFriendReferralBookings(producerId);
+        try {
+            const result = await ProducerInsightsService.getFriendReferralBookings(producerId);
+            return result;
+        } catch (error: any) {
+            const msg = String(error?.message || error);
+            if (msg.includes("No referral") || msg.includes("not found") || msg.includes("No bookings")) {
+                return {
+                    message: "You don't have any friend referral bookings yet. Encourage customers to share your business!",
+                    data: [],
+                };
+            }
+            return { message: "Failed to fetch referral bookings. Please try again later.", data: null };
+        }
     },
 });
 
 export const getMonthlyAverageRating = tool({
     name: "get_monthly_average_rating",
-    description: "Get the producer’s average customer rating for the current month.",
-    parameters: z.object({ producerId: z.number() }),
+    description: "Get the producer's average customer rating for the current month.",
+    parameters: z.object({
+        producerId: z.number(),
+    }),
     async execute({ producerId }) {
-        const res = await ProducerInsightsService.getMonthlyAverageRating(producerId);
-        return res; // { averageRating: number }
+        try {
+            const res = await ProducerInsightsService.getMonthlyAverageRating(producerId);
+            return res;
+        } catch (error: any) {
+            const msg = String(error?.message || error);
+            if (msg.includes("No rating") || msg.includes("not found") || msg.includes("No data")) {
+                return { message: "You don't have any ratings for this month yet.", data: { averageRating: 0 } };
+            }
+            return { message: "Failed to fetch average rating. Please try again later.", data: null };
+        }
     },
 });
 
@@ -228,29 +261,55 @@ export const getCustomersByRating = tool({
     async execute({ producerId, rating }) {
         try {
             const rows = await ProducerInsightsService.getCustomersByRating(producerId, rating);
-            return rows; // [] when none
-        } catch (e) {
-            // Avoid surfacing internal errors to the agent reply
-            return [];
+            return {
+                message:
+                    rows.length > 0
+                        ? `Found ${rows.length} customers with ${rating}-star ratings`
+                        : `No customers have given ${rating}-star ratings yet`,
+                data: rows,
+            };
+        } catch (e: any) {
+            const msg = String(e?.message || e);
+            if (msg.includes("No customers") || msg.includes("not found") || msg.includes("No ratings")) {
+                return { message: `No customers have given ${rating}-star ratings yet`, data: [] };
+            }
+            return { message: "Failed to fetch customers by rating. Please try again later.", data: null };
         }
     },
 });
 
 export const getRatingBreakdown = tool({
     name: "get_rating_breakdown",
-    description: "Return the current overall rating and criteria breakdown for the producer, based on its type (restaurant, wellness, leisure).",
+    description: "Return the current overall rating and criteria breakdown for the producer.",
     parameters: z.object({
         producerId: z.number(),
     }),
     async execute({ producerId }) {
-        const res = await ProducerInsightsService.getRatingBreakdown(producerId);
-        // Always return a safe shape
-        if (!res) {
-            return { type: null, overall: 0, criteria: {}, updatedAt: null };
+        try {
+            const res = await ProducerInsightsService.getRatingBreakdown(producerId);
+            if (!res) {
+                return {
+                    message: "You don't have any rating data yet. Ratings will appear once customers start reviewing your business.",
+                    data: { type: null, overall: 0, criteria: {}, updatedAt: null },
+                };
+            }
+
+            const oneDec = (n: number) => (Number.isFinite(n) ? parseFloat(n.toFixed(1)) : 0);
+            const criteria = Object.fromEntries(Object.entries(res.criteria).map(([k, v]) => [k, oneDec(v as number)]));
+
+            return {
+                message: `Overall rating: ${oneDec(res.overall)}`,
+                data: { type: res.type, overall: oneDec(res.overall), criteria, updatedAt: res.updatedAt },
+            };
+        } catch (error: any) {
+            const msg = String(error?.message || error);
+            if (msg.includes("No rating") || msg.includes("not found") || msg.includes("No data")) {
+                return {
+                    message: "You don't have any rating data yet. Ratings will appear once customers start reviewing your business.",
+                    data: { type: null, overall: 0, criteria: {}, updatedAt: null },
+                };
+            }
+            return { message: "Failed to fetch rating breakdown. Please try again later.", data: null };
         }
-        // Normalize numbers to 1 decimal place if you prefer
-        const oneDec = (n: number) => Number.isFinite(n) ? parseFloat(n.toFixed(1)) : 0;
-        const criteria = Object.fromEntries(Object.entries(res.criteria).map(([k, v]) => [k, oneDec(v as number)]));
-        return { type: res.type, overall: oneDec(res.overall), criteria, updatedAt: res.updatedAt };
     },
 });
