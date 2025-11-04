@@ -1,72 +1,83 @@
+import axios from "axios";
 import { BadRequestError } from "../../errors/badRequest.error";
 import { NotFoundError } from "../../errors/notFound.error";
 import { OwnerType } from "../../enums/OwnerType.enum";
 import { SubscriptionPlan } from "../../enums/SubscriptionPlan.enum";
 import { SubscriptionStatus } from "../../enums/SubscriptionStatus.enum";
 import { TransactionStatus, TransactionType } from "../../enums/Transaction.enums";
-import { SubscriptionInput } from "../../validators/app/subscription.validation";
+import { RevenueCatSubscriptionInput } from "../../validators/app/subscription.validation";
 import { SubscriptionRepository, TransactionRepository } from "../../repositories";
 
-/**
- * Create or upgrade a subscription (works for both User and Producer)
- */
-export const createOrUpgrade = async (ownerId: number, input: SubscriptionInput) => {
-    const { ownerType, plan, amount, providerData } = input;
-
+// Sync RevenueCat Subscription (verify or upgrade)
+export const syncRevenueCatSubscription = async (
+    ownerId: number,
+    input: RevenueCatSubscriptionInput
+) => {
+    const { ownerType, plan, revenueCatData } = input;
     if (!ownerId) throw new BadRequestError("ownerId is required");
-    if (!ownerType) throw new BadRequestError("ownerType is required");
-    if (!plan) throw new BadRequestError("Subscription plan is required");
 
-    // Step 1: Find existing subscription (if any)
-    let subscription = await SubscriptionRepository.findOne({ where: { ownerId, ownerType } });
+    // Verify with RevenueCat
+    const { appUserId, entitlement, platform, purchaseToken } = revenueCatData;
+
+    const RC_API_KEY = process.env.REVENUECAT_SECRET_KEY!;
+    const RC_BASE = "https://api.revenuecat.com/v1";
+
+    const rcRes = await axios.get(`${RC_BASE}/subscribers/${appUserId}`, {
+        headers: { Authorization: `Bearer ${RC_API_KEY}` },
+    });
+
+    const entitlements = rcRes.data.subscriber.entitlements || {};
+    const activeEntitlement = entitlements[entitlement];
+
+    if (!activeEntitlement || activeEntitlement.expires_date == null)
+        throw new BadRequestError("No active RevenueCat entitlement found.");
 
     const now = new Date();
-    const endDate = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000); // 30 days validity
+    const endDate = new Date(activeEntitlement.expires_date);
 
-    // Step 2: Create or update
+    // Create or update local subscription
+    let subscription = await SubscriptionRepository.findOne({ where: { ownerId, ownerType } });
+
     if (!subscription) {
         subscription = SubscriptionRepository.create({
             ownerId,
             ownerType,
             plan,
+            status: SubscriptionStatus.ACTIVE,
             startDate: now,
             endDate,
-            status: SubscriptionStatus.ACTIVE,
             autoRenew: true,
-            provider: providerData?.provider || null,
-            providerSubscriptionId: providerData?.subscriptionId || null,
+            provider: "revenuecat",
+            providerSubscriptionId: purchaseToken,
         });
     } else {
         subscription.plan = plan;
         subscription.status = SubscriptionStatus.ACTIVE;
         subscription.startDate = now;
         subscription.endDate = endDate;
-        subscription.provider = providerData?.provider || null;
-        subscription.providerSubscriptionId = providerData?.subscriptionId || null;
+        subscription.provider = "revenuecat";
+        subscription.providerSubscriptionId = purchaseToken;
     }
 
     await SubscriptionRepository.save(subscription);
 
-    // Step 3: Log transaction
+    // Record Transaction
     const transaction = TransactionRepository.create({
         subscription,
         type: TransactionType.PURCHASE,
         status: TransactionStatus.SUCCESS,
         plan,
-        amount,
+        amount: 0, // handled by app stores
         currency: "USD",
-        providerTransactionId: providerData?.transactionId || null,
-        message: "Subscription activated successfully.",
+        providerTransactionId: purchaseToken,
+        message: "RevenueCat subscription synced successfully.",
     });
 
     await TransactionRepository.save(transaction);
-
     return subscription;
 };
 
-/**
- * Fetch active subscription (auto-create free if not found)
- */
+// Fetch active subscription
 export const getActiveSubscription = async (ownerId: number, ownerType: OwnerType) => {
     if (!ownerId) throw new BadRequestError("ownerId is required");
 
@@ -76,7 +87,6 @@ export const getActiveSubscription = async (ownerId: number, ownerType: OwnerTyp
     });
 
     if (!subscription) {
-        // Create default FREE plan
         const newSub = SubscriptionRepository.create({
             ownerId,
             ownerType,
@@ -89,9 +99,7 @@ export const getActiveSubscription = async (ownerId: number, ownerType: OwnerTyp
     return subscription;
 };
 
-/**
- * Cancel subscription manually
- */
+// Cancel local subscription
 export const cancelSubscription = async (ownerId: number, ownerType: OwnerType) => {
     const subscription = await SubscriptionRepository.findOne({
         where: { ownerId, ownerType, status: SubscriptionStatus.ACTIVE },
@@ -101,10 +109,8 @@ export const cancelSubscription = async (ownerId: number, ownerType: OwnerType) 
 
     subscription.status = SubscriptionStatus.CANCELED;
     subscription.autoRenew = false;
-
     await SubscriptionRepository.save(subscription);
 
-    // Record cancel transaction
     const transaction = TransactionRepository.create({
         subscription,
         type: TransactionType.DOWNGRADE,
@@ -112,16 +118,14 @@ export const cancelSubscription = async (ownerId: number, ownerType: OwnerType) 
         plan: subscription.plan,
         amount: 0,
         currency: "USD",
-        message: "Subscription canceled.",
+        message: "Subscription canceled locally.",
     });
     await TransactionRepository.save(transaction);
 
     return subscription;
 };
 
-/**
- * Get all transactions for an owner (user or producer)
- */
+// Get transactions
 export const getMyTransactions = async (ownerId: number, ownerType: OwnerType) => {
     const subscription = await SubscriptionRepository.findOne({
         where: { ownerId, ownerType },

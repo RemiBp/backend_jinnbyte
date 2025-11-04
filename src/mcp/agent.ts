@@ -18,6 +18,8 @@ import {
     getMonthlyAverageRating,
     getCustomersByRating,
     getRatingBreakdown,
+    findNearbyEvents,
+    getPlacesByStarRating,
 } from "./tool";
 
 interface CopilotResponse {
@@ -96,6 +98,8 @@ const AGENT_CONFIG = {
             "get_monthly_average_rating",
             "get_customers_by_rating",
             "get_rating_breakdown",
+            "find_nearby_events",
+            "get_places_by_star_rating",
         ],
     },
 
@@ -110,6 +114,8 @@ const AGENT_CONFIG = {
         findMostVisitedRestaurants,
         checkRestaurantAvailability,
         findOpenWellnessStudios,
+        findNearbyEvents,
+        getPlacesByStarRating,
 
         // Producer tools
         getMostEngagedItems,
@@ -141,7 +147,7 @@ function parseAgentResponse(response: unknown): CopilotResponse {
                     askUser: parsed.askUser
                 };
             }
-        } catch {}
+        } catch { }
         return { message: trimmed || "Empty response", data: null };
     }
 
@@ -166,7 +172,7 @@ export const CopilotAgent = {
 
     async handle(query: string, context: Record<string, any>) {
         const role = context?.role || "user";
-        
+
         const promptHeader =
             role === "producer"
                 ? "You are the ChoiceApp Producer Copilot."

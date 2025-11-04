@@ -1,5 +1,5 @@
 import { Between, ILike } from "typeorm";
-import { startOfMonth, endOfMonth, startOfWeek, endOfWeek } from "date-fns";
+import { startOfMonth, endOfMonth, startOfWeek, endOfWeek, addDays } from "date-fns";
 import {
     BookingRepository,
     PostRatingRepository,
@@ -14,7 +14,9 @@ import {
     WellnessRepository,
     RestaurantRatingRepository,
     ProducerRepository,
-    FollowRepository
+    FollowRepository,
+    EventRepository,
+    WellnessServiceRepository
 } from "../../repositories";
 import { BadRequestError } from "../../errors/badRequest.error";
 import { NotFoundError } from "../../errors/notFound.error";
@@ -28,8 +30,13 @@ import PostStatistics from "../../models/PostStatistics";
 import { avgOverallForMonthRepo } from "../../utils/avgOverallForMonthRepo";
 import { BusinessRole } from "../../enums/Producer.enum";
 import { getProducerSlots } from "./profile.service";
-import { ProducerType } from "../../enums/ProducerType.enum";
+import { ProducerType, SortOption } from "../../enums/ProducerType.enum";
 import { FollowStatusEnums } from "../../enums/followStatus.enum";
+import { NearbyProducersInput } from "../../validators/producer/maps.validation";
+import Wellness from "../../models/Wellness";
+import Leisure from "../../models/Leisure";
+import RestaurantRating from "../../models/RestaurantRating";
+import PostgresDataSource from "../../data-source";
 
 type ReferralRow = {
     bookingId: number;
@@ -47,15 +54,329 @@ type Row = {
     date: Date;
 };
 
-// Producer Insights Service
+const EARTH_RADIUS_KM = 6371;
+
+export const getNearbyProducers = async (userId: number, data: NearbyProducersInput & { dishName?: string }) => {
+    const { latitude, longitude, radius, type, limit, page, sort, dishName } = data;
+
+    if (type === ProducerType.FRIENDS) {
+        if (!userId) throw new Error("userId is required to fetch nearby friends");
+        return await getNearbyFriends(latitude, longitude, radius, userId);
+    }
+
+    const distExpr = `
+    ${EARTH_RADIUS_KM} * 2 * ASIN(SQRT(
+      POWER(SIN(RADIANS(:lat - p.latitude) / 2), 2) +
+      COS(RADIANS(:lat)) * COS(RADIANS(p.latitude)) *
+      POWER(SIN(RADIANS(:lng - p.longitude) / 2), 2)
+    ))
+  `;
+
+    const qb = ProducerRepository.createQueryBuilder("p")
+        .select([
+            "p.id AS id",
+            "p.name AS name",
+            "p.type AS type",
+            "p.latitude AS latitude",
+            "p.longitude AS longitude",
+            "p.address AS address",
+        ])
+        .addSelect(`${distExpr}`, "distance_km")
+        .where("p.isActive = true")
+        .andWhere("p.latitude IS NOT NULL AND p.longitude IS NOT NULL")
+        .andWhere(`${distExpr} <= :radius`, { radius })
+        .setParameters({ lat: latitude, lng: longitude })
+        .offset((page - 1) * limit)
+        .limit(limit);
+
+    if (type && type !== ProducerType.ALL) {
+        qb.andWhere("p.type::text = :type", { type });
+    }
+
+    // Apply dish filter only when provided
+    if (dishName && dishName.trim().length) {
+        qb
+            .leftJoin("p.menuCategory", "mc")
+            .leftJoin("mc.dishes", "md")
+            // Postgres case-insensitive match
+            .andWhere("md.name ILIKE :dish", { dish: `%${dishName.trim()}%` });
+    }
+
+    if (sort === SortOption.RATING) {
+        qb.orderBy("p.rating->>'average'", "DESC", "NULLS LAST").addOrderBy("distance_km", "ASC");
+    } else {
+        qb.orderBy("distance_km", "ASC").addOrderBy("p.rating->>'average'", "DESC", "NULLS LAST");
+    }
+
+    const producers = await qb.getRawMany();
+
+    if (type === ProducerType.ALL && userId) {
+        const friends = await getNearbyFriends(latitude, longitude, radius, userId);
+        return { producers, friends };
+    }
+
+    return producers;
+};
+
+export const getTopProducers = async (
+    userId: number,
+    data: NearbyProducersInput & { dishName?: string }
+) => {
+    const { latitude, longitude, radius, type, limit, page, sort, dishName } = data;
+
+    if (type === ProducerType.FRIENDS) {
+        if (!userId) throw new Error("userId is required to fetch nearby friends");
+        return await getNearbyFriends(latitude, longitude, radius, userId);
+    }
+
+    const distExpr = `
+    ${EARTH_RADIUS_KM} * 2 * ASIN(SQRT(
+      POWER(SIN(RADIANS(:lat - p.latitude) / 2), 2) +
+      COS(RADIANS(:lat)) * COS(RADIANS(p.latitude)) *
+      POWER(SIN(RADIANS(:lng - p.longitude) / 2), 2)
+    ))
+  `;
+
+    const qb = ProducerRepository.createQueryBuilder("p")
+        .select([
+            "p.id AS id",
+            "p.name AS name",
+            "p.type AS type",
+            "p.latitude AS latitude",
+            "p.longitude AS longitude",
+            "p.address AS address",
+            "p.rating AS rating",
+        ])
+        .addSelect(`${distExpr}`, "distance_km")
+        .where("p.isActive = true")
+        .andWhere("p.latitude IS NOT NULL AND p.longitude IS NOT NULL")
+        .andWhere(`${distExpr} <= :radius`, { radius })
+        .setParameters({ lat: latitude, lng: longitude })
+        .offset((page - 1) * limit)
+        .limit(limit);
+
+    // Filter by business type
+    if (type && type !== ProducerType.ALL) {
+        qb.andWhere("p.type::text = :type", { type });
+    }
+
+    // Optional dish filter
+    if (dishName && dishName.trim().length) {
+        qb.leftJoin("p.menuCategory", "mc")
+            .leftJoin("mc.dishes", "md")
+            .andWhere("md.name ILIKE :dish", { dish: `%${dishName.trim()}%` });
+    }
+
+    // Sort logic
+    if (sort === SortOption.RATING) {
+        qb.orderBy("p.rating->>'average'", "DESC", "NULLS LAST").addOrderBy("distance_km", "ASC");
+    } else {
+        qb.orderBy("distance_km", "ASC").addOrderBy("p.rating->>'average'", "DESC", "NULLS LAST");
+    }
+
+    const producers = await qb.getRawMany();
+
+    // Friends inclusion for ALL type
+    if (type === ProducerType.ALL && userId) {
+        const friends = await getNearbyFriends(latitude, longitude, radius, userId);
+        return { producers, friends };
+    }
+
+    return producers;
+};
+
+const getNearbyFriends = async (lat: number, lng: number, radius: number, userId: number) => {
+    const distExpr = `${EARTH_RADIUS_KM} * 2 * ASIN(SQRT(
+    POWER(SIN(RADIANS(:lat - u.latitude) / 2), 2) +
+    COS(RADIANS(:lat)) * COS(RADIANS(u.latitude)) *
+    POWER(SIN(RADIANS(:lng - u.longitude) / 2), 2)
+  ))`;
+
+    const qb = UserRepository.createQueryBuilder("u")
+        // mutual follow condition
+        .innerJoin("Follow", "f1", "f1.followerId = :userId AND f1.followedUserId = u.id")
+        .innerJoin("Follow", "f2", "f2.followerId = u.id AND f2.followedUserId = :userId")
+        .leftJoin("u.locationPrivacy", "lp")
+        .select([
+            "u.id AS id",
+            "u.fullName AS fullName",
+            "u.userName AS userName",
+            "u.profileImageUrl AS profileImageUrl",
+            "u.latitude AS latitude",
+            "u.longitude AS longitude"
+        ])
+        .addSelect(`${distExpr}`, "distance_km")
+        // only users within given radius
+        .andWhere(`${distExpr} <= :radius`, { radius })
+        .setParameters({ lat, lng, userId })
+        .orderBy("distance_km", "ASC");
+
+    const friends = await qb.getRawMany();
+    return friends;
+};
+
+export const getUpcomingEvents = async ({
+    city,
+    latitude,
+    longitude,
+    radius_km = 10,
+}: {
+    city?: string;
+    latitude?: number;
+    longitude?: number;
+    radius_km?: number;
+}) => {
+    try {
+        // Date range: today → next 5 days
+        const today = new Date();
+        const upcomingEnd = addDays(today, 5);
+        const fromDate = today.toISOString().split("T")[0];
+        const toDate = upcomingEnd.toISOString().split("T")[0];
+
+        const qb = EventRepository.createQueryBuilder("e")
+            .leftJoinAndSelect("e.producer", "p")
+            .select([
+                "e.id AS id",
+                "e.title AS title",
+                "e.date AS date",
+                "e.startTime AS startTime",
+                "e.endTime AS endTime",
+                "e.location AS location",
+                "p.name AS producerName",
+                "p.city AS city",
+                "p.address AS address",
+            ])
+            .where("e.isActive = true")
+            .andWhere("e.isDeleted = false")
+            // works safely for string/varchar date
+            .andWhere("TRIM(e.date) >= :from AND TRIM(e.date) <= :to", {
+                from: fromDate,
+                to: toDate,
+            });
+
+        // City filter (optional)
+        if (city && city.trim()) {
+            qb.andWhere("(p.city IS NOT NULL AND LOWER(p.city) LIKE LOWER(:city))", {
+                city: `%${city.trim()}%`,
+            });
+        }
+
+        // Geo-distance filter (optional)
+        if (latitude && longitude) {
+            const EARTH_RADIUS_KM = 6371;
+            const distExpr = `(
+        ${EARTH_RADIUS_KM} * 2 * ASIN(SQRT(
+          POWER(SIN(RADIANS(:lat - e.latitude) / 2), 2) +
+          COS(RADIANS(:lat)) * COS(RADIANS(e.latitude)) *
+          POWER(SIN(RADIANS(:lng - e.longitude) / 2), 2)
+        ))
+      )`;
+
+            qb.andWhere(
+                `(e.latitude IS NOT NULL AND e.longitude IS NOT NULL AND ${distExpr} <= :radius)`,
+                { radius: radius_km, lat: latitude, lng: longitude }
+            );
+
+            // optional for debugging
+            qb.addSelect(`${distExpr}`, "distance_km");
+        }
+
+        qb.orderBy("e.date", "ASC").addOrderBy("e.startTime", "ASC");
+
+        const events = await qb.getRawMany();
+        return events;
+    } catch (error) {
+        console.error("Error in getUpcomingEvents:", error);
+        throw error;
+    }
+};
+
+export const getProducersGroupedByRating = async (starFilter?: number) => {
+    const connection = PostgresDataSource;
+
+    const restaurantRatings = await connection
+        .getRepository(RestaurantRating)
+        .createQueryBuilder("r")
+        .innerJoinAndSelect("r.producer", "p")
+        .select([
+            "p.id AS id",
+            "p.name AS name",
+            "p.type AS type",
+            "ROUND(r.overall) AS stars",
+            "r.overall AS overall"
+        ])
+        .where("r.overall > 0")
+        .getRawMany();
+
+    const leisureRatings = await connection
+        .getRepository(Leisure)
+        .createQueryBuilder("l")
+        .innerJoinAndSelect("l.producer", "p")
+        .select([
+            "p.id AS id",
+            "p.name AS name",
+            "p.type AS type",
+            "ROUND(l.overall) AS stars",
+            "l.overall AS overall"
+        ])
+        .where("l.overall > 0")
+        .getRawMany();
+
+    const wellnessRatings = await connection
+        .getRepository(Wellness)
+        .createQueryBuilder("w")
+        .innerJoinAndSelect("w.producer", "p")
+        .select([
+            "p.id AS id",
+            "p.name AS name",
+            "p.type AS type",
+            "ROUND(w.overall) AS stars",
+            "w.overall AS overall"
+        ])
+        .where("w.overall > 0")
+        .getRawMany();
+
+    // Combine all results
+    const all = [...restaurantRatings, ...leisureRatings, ...wellnessRatings];
+
+    // Optional filter for specific star
+    const filteredStars = starFilter
+        ? [starFilter]
+        : [1, 2, 3, 4, 5];
+
+    const grouped = filteredStars.map(star => ({
+        stars: star,
+        places: all
+            .filter(i => Number(i.stars) === star)
+            .map(i => ({
+                id: i.id,
+                name: i.name,
+                type: i.type,
+                overall: Number(i.overall),
+            })),
+    }));
+
+    return {
+        message: starFilter
+            ? `Places with ${starFilter}-star rating`
+            : "Places grouped by star ratings",
+        data: grouped,
+    };
+};
+
 export const getMostEngagedItems = async (producerId: number) => {
     if (!producerId) throw new BadRequestError("Producer ID is required");
 
-    const postRepo = PostRepository
+    // Step 1: Detect producer type
+    const producer = await ProducerRepository.findOne({ where: { id: producerId } });
+    if (!producer) throw new NotFoundError("Producer not found.");
+    const type = (producer.type || "").toString().toLowerCase().trim();
+
+    const postRepo = PostRepository;
     const dishRatingRepo = DishRatingRepository;
     const eventRatingRepo = EventRatingRepository;
 
-    // POSTS / SERVICES
+    // Step 2: Get post engagement (common for all types)
     const posts = await postRepo
         .createQueryBuilder("post")
         .leftJoin(PostStatistics, "stats", "stats.postId = post.id")
@@ -71,55 +392,74 @@ export const getMostEngagedItems = async (producerId: number) => {
         .limit(5)
         .getRawMany();
 
-    // MENU DISHES
-    const dishes = await dishRatingRepo
-        .createQueryBuilder("dr")
-        .innerJoin("dr.dish", "dish")
-        .innerJoin("dish.menuCategory", "mc")
-        .innerJoin("mc.producer", "producer")
-        .where("producer.id = :producerId", { producerId })
-        .select([
-            "'dish' AS type",
-            "dish.id AS id",
-            "dish.name AS title",
-            "AVG(dr.rating) AS avgRating",
-            "COUNT(dr.id) AS totalRatings",
-            "(COUNT(dr.id) * AVG(dr.rating)) AS engagementScore",
-        ])
-        .groupBy("dish.id")
-        .orderBy("engagementScore", "DESC")
-        .limit(5)
-        .getRawMany();
+    // Step 3: 🍽 Dishes (restaurants only)
+    let dishes: any[] = [];
+    if (type === "restaurant") {
+        console.log("🍽 Fetching top dishes...");
+        dishes = await dishRatingRepo
+            .createQueryBuilder("dr")
+            .innerJoin("dr.menuDish", "dish") // Correct relation: dishRating.menuDish
+            .innerJoin("dish.menuCategory", "mc")
+            .innerJoin("mc.producer", "producer")
+            .where("producer.id = :producerId", { producerId })
+            .select([
+                "'dish' AS type",
+                "dish.id AS id",
+                "dish.name AS title",
+                "COALESCE(AVG(dr.rating), 0) AS avgRating",
+                "COUNT(dr.id) AS totalRatings",
+                "(COUNT(dr.id) * COALESCE(AVG(dr.rating), 0)) AS engagementScore",
+            ])
+            .groupBy("dish.id")
+            .orderBy("engagementScore", "DESC")
+            .limit(5)
+            .getRawMany();
 
-    // EVENTS / ACTIVITIES
-    const events = await eventRatingRepo
-        .createQueryBuilder("er")
-        .innerJoin("er.event", "event")
-        .where("event.producerId = :producerId", { producerId })
-        .andWhere("event.isDeleted = false")
-        .select([
-            "'event' AS type",
-            "event.id AS id",
-            "event.title AS title",
-            "AVG(er.rating) AS avgRating",
-            "COUNT(er.id) AS totalRatings",
-            "(COUNT(er.id) * AVG(er.rating)) AS engagementScore",
-        ])
-        .groupBy("event.id")
-        .orderBy("engagementScore", "DESC")
-        .limit(5)
-        .getRawMany();
+        console.log("🍽 Dishes Found:", dishes.length);
+    }
 
-    // COMBINE & SORT
-    const allItems = [...posts, ...dishes, ...events].sort(
-        (a, b) => Number(b.engagementScore) - Number(a.engagementScore)
-    );
+    // Step 4: Activities (leisure only)
+    let events: any[] = [];
+    if (type === "leisure") {
+        events = await eventRatingRepo
+            .createQueryBuilder("er")
+            .innerJoin("er.event", "event")
+            .where("event.producerId = :producerId", { producerId })
+            .andWhere("event.isDeleted = false")
+            .select([
+                "'event' AS type",
+                "event.id AS id",
+                "event.title AS title",
+                "COALESCE(AVG(er.rating), 0) AS avgRating",
+                "COUNT(er.id) AS totalRatings",
+                "(COUNT(er.id) * COALESCE(AVG(er.rating), 0)) AS engagementScore",
+            ])
+            .groupBy("event.id")
+            .orderBy("engagementScore", "DESC")
+            .limit(5)
+            .getRawMany();
+    }
+
+    // Step 5: Combine and prioritize
+    let allItems: any[] = [];
+    if (type === "restaurant" && dishes.length > 0) allItems = dishes;
+    else if (type === "leisure" && events.length > 0) allItems = events;
+    else allItems = posts;
+
+    if (!allItems.length) allItems = posts;
 
     if (!allItems.length)
         throw new NotFoundError("No engagement data found for this producer");
 
-    return allItems.slice(0, 10); // top 10 across all categories
+    return allItems
+        .map((item) => ({
+            ...item,
+            engagementScore: Number(item.engagementScore) || 0,
+        }))
+        .sort((a, b) => b.engagementScore - a.engagementScore)
+        .slice(0, 10);
 };
+
 
 export const getUpcomingBookings = async (producerId: number, date?: string | null) => {
     if (!producerId) throw new BadRequestError("Producer ID is required");
@@ -288,22 +628,18 @@ export const getMonthlyAverageRating = async (producerId: number) => {
     return { averageRating: Number.isFinite(avg) ? parseFloat(avg.toFixed(1)) : 0 };
 };
 
-export const getCustomersByRating = async (producerId: number, rating: number) => {
+export const getCustomersByRating = async (producerId: number, rating: number): Promise<Row[]> => {
     if (!producerId) throw new BadRequestError("Producer ID is required");
     if (!rating || rating < 1 || rating > 5)
         throw new BadRequestError("Rating must be between 1 and 5");
 
-    // --- Restaurant/Wellness reviews via Booking -> Producer(userId) mapping
-    const restaurantRows: Row[] = await ReviewRepository
-        .createQueryBuilder("rev")
-        .innerJoin("rev.booking", "b")                        // assumes Review.booking relation
+    const restaurantRows = await ReviewRepository.createQueryBuilder("rev")
+        .innerJoin("rev.booking", "b")
         .innerJoin(Producer, "p", "p.userId = b.restaurantId AND p.id = :producerId", { producerId })
         .leftJoin(User, "u", "u.id = b.customerId")
-        // Accept common rating column names: overall | rating | stars
         .where("(rev.overall = :rating OR rev.rating = :rating OR rev.stars = :rating)", { rating })
         .select([
             "rev.id AS ratingId",
-            // coalesce the rating column back to one field:
             "COALESCE(rev.overall, rev.rating, rev.stars) AS rating",
             "u.id AS userId",
             "COALESCE(u.fullName, 'Unknown') AS userName",
@@ -314,12 +650,10 @@ export const getCustomersByRating = async (producerId: number, rating: number) =
         .limit(50)
         .getRawMany();
 
-    // --- Event reviews (optional) — only if you actually have a Review ↔ EventBooking path
     let eventRows: Row[] = [];
     try {
-        eventRows = await ReviewRepository
-            .createQueryBuilder("rev")
-            .innerJoin("rev.eventBooking", "eb")               // assumes Review.eventBooking relation if present
+        eventRows = await ReviewRepository.createQueryBuilder("rev")
+            .innerJoin("rev.eventBooking", "eb")
             .innerJoin(EventEntity, "e", "e.id = eb.eventId AND e.producerId = :producerId", { producerId })
             .leftJoin(User, "eu", "eu.id = eb.userId")
             .where("(rev.overall = :rating OR rev.rating = :rating OR rev.stars = :rating)", { rating })
@@ -335,7 +669,6 @@ export const getCustomersByRating = async (producerId: number, rating: number) =
             .limit(50)
             .getRawMany();
     } catch {
-        // If you don’t have event reviews, silently skip
         eventRows = [];
     }
 
@@ -343,9 +676,9 @@ export const getCustomersByRating = async (producerId: number, rating: number) =
         .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
         .slice(0, 50);
 
-    // Return [] instead of throwing so the tool doesn’t error out
-    return data;
+    return data ?? [];
 };
+
 
 type RatingBreakdown =
     | {
@@ -538,8 +871,15 @@ export const getProducerAvailabilityByName = async (producerName: string) => {
         // Fetch all slots for this producer
         const availability = await getProducerSlots(producer.userId);
 
+        // Determine display name
+        const displayName =
+            producer.businessName ||
+            producer.name ||
+            producer.displayName ||
+            "this restaurant";
+
         return {
-            message: `Availability for ${producer.businessName}`,
+            message: `Availability for ${displayName}`,
             data: availability.data,
         };
     } catch (error) {
