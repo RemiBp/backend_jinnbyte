@@ -57,6 +57,7 @@ import MenuCategory from '../../models/MenuCategory';
 import MenuDishes from '../../models/MenuDishes';
 import PostgresDataSource from '../../data-source';
 import bcrypt from 'bcrypt';
+import { ForbiddenError } from '../../errors/forbidden.error';
 
 export const getAllServiceType = async () => {
   const serviceTypes = await WellnessServiceTypeRepository.find({
@@ -554,6 +555,74 @@ export const getGalleryImages = async (userId: number) => {
     source: photo.source,
   }));
 };
+
+export const deleteGalleryImages = async (userId: number, photoIds: number[]) => {
+  if (!photoIds?.length) {
+    throw new BadRequestError("At least one photoId is required.");
+  }
+
+  // Validate producer ownership
+  const user = await UserRepository.findOne({
+    where: { id: userId },
+    relations: ["producer"],
+  });
+  if (!user || !user.producer) {
+    throw new NotFoundError("Producer not found for this user.");
+  }
+
+  const producerId = user.producer.id;
+
+  // Fetch all matching photos
+  const photos = await PhotoRepository.find({
+    where: { id: In(photoIds), producer: { id: producerId } },
+  });
+
+  if (!photos.length) {
+    throw new NotFoundError("No matching gallery images found.");
+  }
+  if (photos.length !== photoIds.length) {
+    throw new ForbiddenError("Some images do not belong to this producer.");
+  }
+
+  // Extract S3 keys robustly (normalize URLs)
+  const s3Keys = photos
+    .map((p: any) => {
+      let key = p.url?.trim() || "";
+
+      // Remove domain prefix if exists
+      const base = process.env.AWS_S3_URI?.replace(/\/$/, "") || "";
+      if (key.startsWith(base)) key = key.replace(base, "");
+
+      // Remove leading slash if exists
+      if (key.startsWith("/")) key = key.slice(1);
+
+      // Optional safety check: only delete gallery folder or GalleryImage prefix
+      if (key.includes("GalleryImage") || key.includes("/gallery/")) return key;
+      return null;
+    })
+    .filter((key: any): key is string => Boolean(key));
+
+  if (!s3Keys.length) {
+    throw new BadRequestError("No valid gallery images to delete.");
+  }
+
+  // Delete from S3 (one by one for reliability)
+  await Promise.all(
+    s3Keys.map(async (key: any) => {
+      try {
+        await s3Service.deleteObject(key);
+      } catch (error) {
+        console.error(`[Gallery Delete] Failed to delete S3 object: ${key}`, error);
+      }
+    })
+  );
+
+  // Delete from DB
+  await PhotoRepository.remove(photos);
+
+  return { message: "Gallery images deleted successfully." };
+};
+
 
 // export const setOperationalHours = async (input: SetOperationHoursSchema & { userId: number }) => {
 //   const { userId, hours } = input;

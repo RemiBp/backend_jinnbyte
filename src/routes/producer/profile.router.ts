@@ -25,6 +25,7 @@ ProducerProfileRouter.post('/setServiceType', ProfileController.setServiceType);
 ProducerProfileRouter.get('/getServiceType', ProfileController.getServiceType);
 ProducerProfileRouter.post('/setGalleryImages', ProfileController.setGalleryImages);
 ProducerProfileRouter.get('/getGalleryImages', ProfileController.getGalleryImages);
+ProducerProfileRouter.delete('/deleteGalleryImages', ProfileController.deleteGalleryImages);
 ProducerProfileRouter.post('/generateSlots', ProfileController.generateSlots);
 
 // ProducerProfileRouter.get('/getProfile', ProfileController.getProfile);
