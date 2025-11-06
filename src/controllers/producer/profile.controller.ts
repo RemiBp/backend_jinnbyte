@@ -18,6 +18,7 @@ import {
 } from '../../validators/producer/profile.validation';
 import { ProfileService } from '../../services/producer/profile.service';
 import { time } from 'console';
+import { sendApiResponse } from '../../utils/sendApiResponse';
 
 export const getAllServiceType = async (req: Request, res: Response, next: NextFunction) => {
   try {
@@ -42,7 +43,7 @@ export const updateProfile = async (req: Request, res: Response, next: NextFunct
   }
 };
 
-export const updatePassword = async (req: Request,res: Response,next: NextFunction) => {
+export const updatePassword = async (req: Request, res: Response, next: NextFunction) => {
   try {
     const validatedData = updatePasswordSchema.parse(req.body);
     const userId = Number(req.userId);
@@ -58,7 +59,7 @@ export const getProfile = async (req: Request, res: Response, next: NextFunction
   try {
     const userId = Number(req.userId);
     const response = await ProfileService.getProfile(userId);
-    res.status(200).json(response);
+    return sendApiResponse(res, 200, "Profile fetched successfully.", response);
   } catch (error) {
     next(error);
   }

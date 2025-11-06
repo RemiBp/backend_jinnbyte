@@ -41,6 +41,8 @@ import {
   WellnessServiceTypeRepository,
   MenuCategoryRepository,
   MenuDishesRepository,
+  PostRepository,
+  FollowRepository,
 } from '../../repositories';
 import { hashPassword } from '../../utils/PasswordUtils';
 import s3Service from '../s3.service';
@@ -173,25 +175,46 @@ export const updatePassword = async (userId: number, payload: UpdatePasswordSche
   }
 };
 
+// export const getProfile = async (userId: number) => {
+//   const user = await UserRepository.findOne({
+//     where: { id: userId },
+//     relations: ["producer", "businessProfile"],
+//   });
+
+//   if (!user) throw new NotFoundError("User not found");
+
+//   let businessProfile = null;
+
+//   if (user.businessProfile) {
+//     // Exclude specific fields using destructuring
+//     const { businessName, address, city, latitude, longitude, phoneNumber, ...rest } = user.businessProfile;
+//     businessProfile = rest;
+//   }
+
+//   return {
+//     producer: user.producer || null,
+//     businessProfile,
+//   };
+// };
+
 export const getProfile = async (userId: number) => {
-  const user = await UserRepository.findOne({
-    where: { id: userId },
-    relations: ["producer", "businessProfile"],
+  const producer = await ProducerRepository.findOne({
+    where: { userId },
+    relations: ["user", "posts", "followers"],
   });
 
-  if (!user) throw new NotFoundError("User not found");
+  if (!producer) throw new NotFoundError("Producer not found.");
 
-  let businessProfile = null;
-
-  if (user.businessProfile) {
-    // Exclude specific fields using destructuring
-    const { businessName, address, city, latitude, longitude, phoneNumber, ...rest } = user.businessProfile;
-    businessProfile = rest;
-  }
+  // Count posts, followers, etc.
+  const [postCount, followerCount] = await Promise.all([
+    PostRepository.count({ where: { producerId: producer.id } }),
+    FollowRepository.count({ where: { producerId: producer.id } }),
+  ]);
 
   return {
-    producer: user.producer || null,
-    businessProfile,
+    producer,
+    postCount,
+    followerCount,
   };
 };
 
