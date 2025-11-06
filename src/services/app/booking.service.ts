@@ -1,6 +1,7 @@
 import {
   BookingRepository,
   CuisineTypeRepository,
+  EventBookingRepository,
   FavouriteRestaurantRepository,
   NotificationRepository,
   ProducerRepository,
@@ -30,6 +31,7 @@ import { getCurrentTimeInUTCFromTimeZone, getTodayDateInTimeZone } from '../../u
 import { sendAdminNotification } from '../../utils/sendAdminNotification';
 import { GetRestaurantImagesSchema } from '../../validators/producer/profile.validation';
 import Review from '../../models/Review';
+import { StatusEnums } from '../../models/booking';
 
 export const findRestaurantsNearby = async (findRestaurantsNearByObject: FindRestaurantsNearbySchema) => {
   try {
@@ -249,7 +251,7 @@ export const getRestaurant = async (userId: number, restaurantId: number) => {
   try {
     const restaurant = await UserRepository.findOne({
       where: { id: restaurantId },
-      relations: ['role', 'producer', 'operationalHours', 'paymentMethods' ],
+      relations: ['role', 'producer', 'operationalHours', 'paymentMethods'],
     });
     // const isFav = await FavouriteRestaurantRepository.findOne({
     //   where: { user: { id: userId }, restaurant: { id: restaurantId } },
@@ -281,28 +283,28 @@ export const getRestaurantSlots = async (restaurantId: number, timeZone: string,
     const currentTime = getCurrentTimeInUTCFromTimeZone(timeZone);
     const time = currentTime.split('T')[1].substring(0, 5);
 
-        const todayDate = getTodayDateInTimeZone(timeZone);
-        if(date && date < todayDate){
-          throw new BadRequestError('Kindly select a future date');
-        }
+    const todayDate = getTodayDateInTimeZone(timeZone);
+    if (date && date < todayDate) {
+      throw new BadRequestError('Kindly select a future date');
+    }
 
 
     const unavailableSlots = await UnavailableSlotRepository.find({
       where: { userId: restaurantId, date: date },
       select: ['slotId'],
     });
-    
+
 
     const unavailableSlotIds = unavailableSlots.map((slot: { slotId: number }) => slot.slotId);
-    
+
 
     const slotQuery = SlotRepository.createQueryBuilder('slot')
       .innerJoin('slot.user', 'user')
       .where('user.id = :restaurantId', { restaurantId })
       .andWhere('slot.day = :day', { day: inputDay })
-      //.andWhere('slot.id NOT IN (:...unavailableSlotIds)', { unavailableSlotIds });
+    //.andWhere('slot.id NOT IN (:...unavailableSlotIds)', { unavailableSlotIds });
 
-      if (unavailableSlots.length > 0) {
+    if (unavailableSlots.length > 0) {
       slotQuery.andWhere('slot.id NOT IN (:...unavailableSlotIds)', { unavailableSlotIds });
     }
 
@@ -433,7 +435,7 @@ export const createBooking = async (hireObject: CreateBookingSchema) => {
     //   );
     // }
 
-    
+
 
     return { booking: saveBooking };
   } catch (error) {
@@ -546,7 +548,7 @@ export const updateBooking = async (hireObject: UpdateBookingSchema) => {
       );
     }
 
-    
+
 
     return { booking: existingBooking };
   } catch (error) {
@@ -555,163 +557,369 @@ export const updateBooking = async (hireObject: UpdateBookingSchema) => {
   }
 };
 
-export const getBookings = async (userId: number, booking: string, timeZone: string, page = 1, limit = 10) => {
+// export const getBookings = async (userId: number, booking: string, timeZone: string, page = 1, limit = 10) => {
+//   try {
+//     let currentTime = getCurrentTimeInUTCFromTimeZone(timeZone);
+
+//     const user = await UserRepository.findOne({
+//       where: {
+//         id: userId,
+//       },
+//       relations: ['role'],
+//     });
+
+//     if (!user) {
+//       throw new NotFoundError('User not found');
+//     }
+
+//     const userRole = await RolesRepository.findOne({
+//       where: {
+//         name: 'user',
+//       },
+//     });
+
+//     // if (user.role.id !== userRole.id) {
+//     //   throw new BadRequestError('User is not an App user');
+//     // }
+//     let bookings: any[] = [];
+//     let total = 0;
+//     let totalPages = 0;
+//     const nowIso = getCurrentTimeInUTCFromTimeZone(timeZone);
+//     const bookingsToUpdate = await BookingRepository.find({
+//       where: {
+//         customer: { id: user.id },
+//         endDateTime: LessThan(nowIso),
+//         status: 'scheduled'
+//       },
+//       order: { id: 'DESC' },
+//       skip: (page - 1) * limit,
+//       take: limit,
+//     });
+//     const bookingIdsToUpdate = bookingsToUpdate
+//       .map((booking: { id: any }) => booking.id);
+
+//     if (bookingIdsToUpdate.length > 0) {
+//       await BookingRepository.createQueryBuilder()
+//         .update()
+//         .set({ status: 'cancelled', cancelReason: 'Cancelled by system because its overdue and no action was taken' })
+//         .whereInIds(bookingIdsToUpdate)
+//         .execute();
+//     }
+
+//     switch (booking) {
+//       case 'scheduled':
+//         const scheduledBookings = await BookingRepository.findAndCount({
+//           where: {
+//             customer: {
+//               id: user.id,
+//             },
+//             status: 'scheduled',
+//             endDateTime: MoreThan(currentTime),
+//           },
+//           relations: ['customer', 'restaurant', 'restaurant.restaurant', 'review'],
+//           order: {
+//             startDateTime: 'ASC',
+//           },
+//           skip: (page - 1) * limit,
+//           take: limit,
+//         });
+//         bookings = scheduledBookings[0] || [];
+//         total = scheduledBookings[1] || 0;
+//         totalPages = Math.ceil(scheduledBookings[1] / limit);
+//         break;
+
+//       case 'inProgress':
+//         let inProgressBookings = await BookingRepository.findOne({
+//           where: {
+//             customer: {
+//               id: user.id,
+//             },
+//             status: In(['inProgress']),
+//           },
+//           relations: ['customer', 'restaurant', 'restaurant.restaurant', 'review'],
+//           order: {
+//             id: 'DESC',
+//           },
+//         });
+//         bookings = inProgressBookings ? [inProgressBookings] : [];
+//         total = inProgressBookings ? 1 : 0;
+//         totalPages = 1;
+//         break;
+
+//       case 'completed':
+//         const nowIso = getCurrentTimeInUTCFromTimeZone(timeZone);
+//         const [bookingsToUpdate, countToUpdate] = await BookingRepository.findAndCount({
+//           where: {
+//             customer: { id: user.id },
+//             endDateTime: LessThan(nowIso),
+//             status: Not(In(['cancelled', 'scheduled'])),
+//           },
+//           relations: ['customer', 'restaurant', 'restaurant.restaurant', 'review'],
+//           order: { id: 'DESC' },
+//           skip: (page - 1) * limit,
+//           take: limit,
+//         });
+//         const bookingIdsToUpdate = bookingsToUpdate
+//           //          .filter((booking: { status: string }) => booking.status !== 'completed')
+//           .map((booking: { id: any }) => booking.id);
+
+//         if (bookingIdsToUpdate.length > 0) {
+//           await BookingRepository.createQueryBuilder()
+//             .update()
+//             .set({ status: 'completed' })
+//             .whereInIds(bookingIdsToUpdate)
+//             .execute();
+//         }
+//         bookings = bookings = bookingsToUpdate.map((booking: any) => ({
+//           ...booking,
+//           status: 'completed',
+//         }));
+//         total = countToUpdate;
+//         totalPages = Math.ceil(total / limit);
+//         break;
+//       case 'cancelled':
+//         const cancelledbookings = await BookingRepository.findAndCount({
+//           where: {
+//             customer: {
+//               id: user.id,
+//             },
+//             status: 'cancelled',
+//           },
+//           relations: ['customer', 'restaurant', 'restaurant.restaurant', 'review'],
+//           order: {
+//             id: 'DESC',
+//           },
+//           skip: (page - 1) * limit,
+//           take: limit,
+//         });
+//         bookings = cancelledbookings[0] || [];
+//         total = cancelledbookings[1] || 0;
+//         totalPages = Math.ceil(total / limit);
+//         break;
+
+//       default:
+//         throw new BadRequestError('Invalid booking type requested');
+//     }
+//     return {
+//       bookings,
+//       total,
+//       currentPage: page,
+//       totalPages: totalPages,
+//     };
+//   } catch (error) {
+//     console.error(
+//       'Error in getBookings',
+//       {
+//         error,
+//       },
+//       'BookingService'
+//     );
+//     throw error;
+//   }
+// };
+
+export const getBookings = async (
+  userId: number,
+  booking: string,
+  timeZone: string,
+  page = 1,
+  limit = 10
+) => {
   try {
     let currentTime = getCurrentTimeInUTCFromTimeZone(timeZone);
 
     const user = await UserRepository.findOne({
-      where: {
-        id: userId,
-      },
-      relations: ['role'],
+      where: { id: userId },
+      relations: ["role"],
     });
 
-    if (!user) {
-      throw new NotFoundError('User not found');
-    }
+    if (!user) throw new NotFoundError("User not found");
 
     const userRole = await RolesRepository.findOne({
-      where: {
-        name: 'user',
-      },
+      where: { name: "user" },
     });
 
-    if (user.role.id !== userRole.id) {
-      throw new BadRequestError('User is not an App user');
-    }
+    // if (user.role.id !== userRole.id) {
+    //   throw new BadRequestError('User is not an App user');
+    // }
+
     let bookings: any[] = [];
     let total = 0;
     let totalPages = 0;
-    const nowIso = getCurrentTimeInUTCFromTimeZone(timeZone);
-        const bookingsToUpdate = await BookingRepository.find({
-              where: {
-                customer: { id: user.id },
-                endDateTime: LessThan(nowIso),
-                status:  'scheduled'
-              },
-              order: { id: 'DESC' },
-              skip: (page - 1) * limit,
-              take: limit,
-            });
-            const bookingIdsToUpdate = bookingsToUpdate
-              .map((booking: { id: any }) => booking.id);
-    
-            if (bookingIdsToUpdate.length > 0) {
-              await BookingRepository.createQueryBuilder()
-                .update()
-                .set({ status: 'cancelled', cancelReason: 'Cancelled by system because its overdue and no action was taken' })
-                .whereInIds(bookingIdsToUpdate)
-                .execute();
-            }
 
+    const nowIso = getCurrentTimeInUTCFromTimeZone(timeZone);
+
+    // Auto-cancel overdue scheduled bookings
+    const bookingsToUpdate = await BookingRepository.find({
+      where: {
+        customer: { id: user.id },
+        endDateTime: LessThan(nowIso),
+        status: "scheduled",
+      },
+      order: { id: "DESC" },
+      skip: (page - 1) * limit,
+      take: limit,
+    });
+
+    const bookingIdsToUpdate = bookingsToUpdate.map((b: any) => b.id);
+    if (bookingIdsToUpdate.length > 0) {
+      await BookingRepository.createQueryBuilder()
+        .update()
+        .set({
+          status: "cancelled",
+          cancelReason:
+            "Cancelled by system because its overdue and no action was taken",
+        })
+        .whereInIds(bookingIdsToUpdate)
+        .execute();
+    }
+
+    // Handle non-event bookings
     switch (booking) {
-      case 'scheduled':
+      case "scheduled": {
         const scheduledBookings = await BookingRepository.findAndCount({
           where: {
-            customer: {
-              id: user.id,
-            },
-            status: 'scheduled',
+            customer: { id: user.id },
+            status: "scheduled",
             endDateTime: MoreThan(currentTime),
           },
-          relations: ['customer', 'restaurant', 'restaurant.restaurant', 'review'],
-          order: {
-            startDateTime: 'ASC',
-          },
+          relations: ["customer", "restaurant", "restaurant.restaurant", "review"],
+          order: { startDateTime: "ASC" },
           skip: (page - 1) * limit,
           take: limit,
         });
         bookings = scheduledBookings[0] || [];
         total = scheduledBookings[1] || 0;
-        totalPages = Math.ceil(scheduledBookings[1] / limit);
+        totalPages = Math.ceil(total / limit);
         break;
+      }
 
-      case 'inProgress':
-        let inProgressBookings = await BookingRepository.findOne({
-          where: {
-            customer: {
-              id: user.id,
-            },
-            status: In(['inProgress']),
-          },
-          relations: ['customer', 'restaurant', 'restaurant.restaurant', 'review'],
-          order: {
-            id: 'DESC',
-          },
-        });
-        bookings = inProgressBookings ? [inProgressBookings] : [];
-        total = inProgressBookings ? 1 : 0;
-        totalPages = 1;
-        break;
-
-      case 'completed':
-        const nowIso = getCurrentTimeInUTCFromTimeZone(timeZone);
-        const [bookingsToUpdate, countToUpdate] = await BookingRepository.findAndCount({
+      case "inProgress": {
+        const inProgress = await BookingRepository.findOne({
           where: {
             customer: { id: user.id },
-            endDateTime: LessThan(nowIso),
-            status: Not(In(['cancelled', 'scheduled'])),
+            status: In(["inProgress"]),
           },
-          relations: ['customer', 'restaurant', 'restaurant.restaurant', 'review'],
-          order: { id: 'DESC' },
-          skip: (page - 1) * limit,
-          take: limit,
+          relations: ["customer", "restaurant", "restaurant.restaurant", "review"],
+          order: { id: "DESC" },
         });
-        const bookingIdsToUpdate = bookingsToUpdate
-//          .filter((booking: { status: string }) => booking.status !== 'completed')
-          .map((booking: { id: any }) => booking.id);
+        bookings = inProgress ? [inProgress] : [];
+        total = inProgress ? 1 : 0;
+        totalPages = 1;
+        break;
+      }
 
+      case "completed": {
+        const nowIso = getCurrentTimeInUTCFromTimeZone(timeZone);
+        const [bookingsToUpdate, countToUpdate] =
+          await BookingRepository.findAndCount({
+            where: {
+              customer: { id: user.id },
+              endDateTime: LessThan(nowIso),
+              status: Not(In(["cancelled", "scheduled"])),
+            },
+            relations: ["customer", "restaurant", "restaurant.restaurant", "review"],
+            order: { id: "DESC" },
+            skip: (page - 1) * limit,
+            take: limit,
+          });
+
+        const bookingIdsToUpdate = bookingsToUpdate.map((b: any) => b.id);
         if (bookingIdsToUpdate.length > 0) {
           await BookingRepository.createQueryBuilder()
             .update()
-            .set({ status: 'completed' })
+            .set({ status: "completed" })
             .whereInIds(bookingIdsToUpdate)
             .execute();
         }
-        bookings = bookings = bookingsToUpdate.map((booking: any) => ({
-          ...booking,
-          status: 'completed',
+
+        bookings = bookingsToUpdate.map((b: any) => ({
+          ...b,
+          status: "completed",
         }));
         total = countToUpdate;
         totalPages = Math.ceil(total / limit);
         break;
-      case 'cancelled':
-        const cancelledbookings = await BookingRepository.findAndCount({
+      }
+
+      case "cancelled": {
+        const cancelledBookings = await BookingRepository.findAndCount({
           where: {
-            customer: {
-              id: user.id,
-            },
-            status: 'cancelled',
+            customer: { id: user.id },
+            status: "cancelled",
           },
-          relations: ['customer', 'restaurant', 'restaurant.restaurant', 'review'],
-          order: {
-            id: 'DESC',
-          },
+          relations: ["customer", "restaurant", "restaurant.restaurant", "review"],
+          order: { id: "DESC" },
           skip: (page - 1) * limit,
           take: limit,
         });
-        bookings = cancelledbookings[0] || [];
-        total = cancelledbookings[1] || 0;
+        bookings = cancelledBookings[0] || [];
+        total = cancelledBookings[1] || 0;
         totalPages = Math.ceil(total / limit);
         break;
+      }
 
       default:
-        throw new BadRequestError('Invalid booking type requested');
+        throw new BadRequestError("Invalid booking type requested");
     }
+
+    // EVENT BOOKINGS SECTION
+    const [eventBookings, eventCount] = await EventBookingRepository.findAndCount({
+      where: {
+        user: { id: user.id },
+        status:
+          booking === "scheduled"
+            ? "scheduled"
+            : booking === "inProgress"
+              ? "inProgress"
+              : booking === "completed"
+                ? "completed"
+                : "cancelled",
+      },
+      relations: ["event", "event.producer"],
+      order: { id: "DESC" },
+      skip: (page - 1) * limit,
+      take: limit,
+    });
+
+    const formattedEventBookings = eventBookings.map((eb: any) => ({
+      ...eb,
+      type: "event",
+      event: {
+        id: eb.event.id,
+        title: eb.event.title,
+        description: eb.event.description,
+        serviceType: eb.event.serviceType,
+        venueName: eb.event.venueName,
+        location: eb.event.location,
+        latitude: eb.event.latitude,
+        longitude: eb.event.longitude,
+        date: eb.event.date,
+        startTime: eb.event.startTime,
+        endTime: eb.event.endTime,
+        timeZone: eb.event.timeZone,
+        pricePerGuest: eb.event.pricePerGuest,
+        maxCapacity: eb.event.maxCapacity,
+      },
+    }));
+
+    // Merge both (simple + event)
+    const unifiedBookings = [
+      ...bookings.map((b) => ({ ...b, type: "simple" })),
+      ...formattedEventBookings,
+    ].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+
+    const unifiedTotal = total + eventCount;
+    const unifiedTotalPages = Math.ceil(unifiedTotal / limit);
+
     return {
-      bookings,
-      total,
+      bookings: unifiedBookings,
+      total: unifiedTotal,
       currentPage: page,
-      totalPages: totalPages,
+      totalPages: unifiedTotalPages,
     };
   } catch (error) {
-    console.error(
-      'Error in getBookings',
-      {
-        error,
-      },
-      'BookingService'
-    );
+    console.error("Error in getBookings", { error }, "BookingService");
     throw error;
   }
 };
@@ -738,9 +946,9 @@ export const getBooking = async (userId: number, bookingId: number, timeZone: st
       },
     });
 
-    if (user.role.id !== userRole.id) {
-      throw new BadRequestError('User is not an App user');
-    }
+    // if (user.role.id !== userRole.id) {
+    //   throw new BadRequestError('User is not an App user');
+    // }
     const currentTimeInLocalZone = DateTime.now().setZone(timeZone);
     const formattedTime = currentTimeInLocalZone.toFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'");
     let currentTime = new Date(formattedTime);
@@ -834,9 +1042,9 @@ export const cancel = async (userId: number, bookingId: number, cancelReason: st
         name: 'user',
       },
     });
-    if (user.role.id !== userRole.id) {
-      throw new BadRequestError('User is not an App user');
-    }
+    // if (user.role.id !== userRole.id) {
+    //   throw new BadRequestError('User is not an App user');
+    // }
 
     const currentTimeInLocalZone = DateTime.now().setZone(timeZone);
     const formattedTime = currentTimeInLocalZone.toFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'");
@@ -868,7 +1076,7 @@ export const cancel = async (userId: number, bookingId: number, cancelReason: st
     const bookingResponse = {
       ...booking,
     };
-    const convertBookingDateToDDMMYY = (booking.startDateTime.split('T')[0].split('-').reverse().join('-')); 
+    const convertBookingDateToDDMMYY = (booking.startDateTime.split('T')[0].split('-').reverse().join('-'));
 
     if (booking.restaurant.deviceId) {
       const notificationData = {
@@ -910,6 +1118,71 @@ export const cancel = async (userId: number, bookingId: number, cancelReason: st
       },
       'BookingService'
     );
+    throw error;
+  }
+};
+
+export const checkIn = async (userId: number, bookingId: number, timeZone: string) => {
+  try {
+    const user = await UserRepository.findOne({
+      where: { id: userId },
+      relations: ["role"],
+    });
+
+    if (!user) throw new NotFoundError("User not found");
+
+    const userRole = await RolesRepository.findOne({ where: { name: "user" } });
+    if (user.role.id !== userRole.id) throw new BadRequestError("User is not an App user");
+
+    const booking = await BookingRepository.findOne({
+      where: {
+        id: bookingId,
+        customer: { id: user.id },
+      },
+      relations: ["customer", "restaurant", "restaurant.restaurant"],
+    });
+
+    if (!booking) throw new NotFoundError("Booking not found");
+
+    if (booking.status === StatusEnums.CANCEL) {
+      throw new BadRequestError("Cancelled bookings cannot be checked-in");
+    }
+
+    if (booking.status === StatusEnums.COMPLETED) {
+      throw new BadRequestError("Completed bookings cannot be checked-in");
+    }
+
+    if (booking.status === StatusEnums.IN_PROGRESS) {
+      throw new BadRequestError("Booking is already checked-in");
+    }
+
+    const currentTimeInLocalZone = DateTime.now().setZone(timeZone);
+    const now = new Date(currentTimeInLocalZone.toFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'"));
+    const startTime = new Date(booking.startDateTime);
+    const endTime = new Date(booking.endDateTime);
+
+    // Ensure current time is within booking slot window
+    if (now < startTime) {
+      throw new BadRequestError("You cannot check-in before your reservation start time");
+    }
+
+    if (now > endTime) {
+      throw new BadRequestError("You cannot check-in after your reservation has ended");
+    }
+
+    // Update status and record check-in time
+    booking.status = StatusEnums.IN_PROGRESS;
+    booking.checkInAt = now.toISOString();
+    await BookingRepository.save(booking);
+
+    return {
+      bookingId: booking.id,
+      status: booking.status,
+      checkInAt: booking.checkInAt,
+      message: "Checked in successfully",
+    };
+  } catch (error) {
+    console.error("Error in checkIn", { error }, "BookingService");
     throw error;
   }
 };

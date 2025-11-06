@@ -53,8 +53,12 @@ export const createEvent = async (userId: number, data: CreateEventInput) => {
         eventTypeId = eventType.id;
     }
 
+    // Default timezone logic
+    const timeZone = data.timeZone && data.timeZone.trim() !== "" ? data.timeZone : "UTC";
+
     const newEvent = await EventRepository.save({
         ...data,
+        timeZone,
         producer: { id: producer.id },
         leisure: leisureId ? { id: leisureId } : null,
         eventType: eventTypeId ? { id: eventTypeId } : null,
