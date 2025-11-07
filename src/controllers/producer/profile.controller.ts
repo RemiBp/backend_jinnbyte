@@ -1,6 +1,7 @@
 import { NextFunction, Request, Response } from 'express';
 import {
   addMenuDishSchema,
+  deleteGalleryImagesSchema,
   deleteRestaurantImageSchema,
   getRestaurantImagesSchema,
   multiPresignedURLSchema,
@@ -60,6 +61,16 @@ export const getProfile = async (req: Request, res: Response, next: NextFunction
     const userId = Number(req.userId);
     const response = await ProfileService.getProfile(userId);
     return sendApiResponse(res, 200, "Profile fetched successfully.", response);
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const getProfileById = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const producerId = Number(req.params.producerId);
+    const profile = await ProfileService.getProfileById(producerId);
+    return sendApiResponse(res, 200, "Producer profile fetched successfully.", profile);
   } catch (error) {
     next(error);
   }
@@ -282,6 +293,20 @@ export const getGalleryImages = async (req: Request, res: Response, next: NextFu
 
     const images = await ProfileService.getGalleryImages(userId);
     res.status(200).json({ images });
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const deleteGalleryImages = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const userId = req.userId;
+    if (!userId) return res.status(401).json({ error: "Unauthorized" });
+
+    const validated = deleteGalleryImagesSchema.parse(req.body);
+    await ProfileService.deleteGalleryImages(userId, validated.photoIds);
+
+    return sendApiResponse(res, 200, "Gallery images deleted successfully.");
   } catch (error) {
     next(error);
   }

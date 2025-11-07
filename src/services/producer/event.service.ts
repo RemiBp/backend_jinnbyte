@@ -8,7 +8,7 @@ import {
 } from '../../repositories';
 import { BadRequestError } from '../../errors/badRequest.error';
 import { NotFoundError } from '../../errors/notFound.error';
-import { CreateEventInput, GetAllEventsInput } from '../../validators/producer/event.validation';
+import { CreateEventInput, FindProducersNearbySchema, GetAllEventsInput } from '../../validators/producer/event.validation';
 import { EventStatus } from '../../enums/eventStatus.enum';
 
 export const getEventTypes = async () => {
@@ -105,7 +105,7 @@ export const getAllEvents = async ({ status, category, type, lat, lng, radius }:
         );
     }
 
-    if (type) {
+    if (type && type.trim() !== "") {
         qb.andWhere("event.serviceType = :type", { type });
     }
 
@@ -145,12 +145,88 @@ export const getEventById = async (userId: number, eventId: number) => {
     const { total } = await EventBookingRepository
         .createQueryBuilder("booking")
         .select("SUM(booking.numberOfPersons)", "total")
-        .where("booking.eventId = :eventId AND booking.isCancelled = false", { eventId })
+        .where("booking.eventId = :eventId", { eventId })
+        .andWhere("booking.status NOT IN (:...cancelledStatuses)", { cancelledStatuses: ['cancelled'] })
         .getRawOne();
 
     return {
         ...event,
         totalParticipants: Number(total) || 0,
+    };
+};
+
+export const findNearbyProducer = async (params: FindProducersNearbySchema) => {
+    const { userId, latitude, longitude, keyword = "", page, limit, radius, producerType } = params;
+
+    if (!latitude || !longitude)
+        throw new BadRequestError("Latitude and Longitude are required.");
+
+    const user = await UserRepository.findOne({ where: { id: userId } });
+    if (!user) throw new NotFoundError("User not found");
+
+    const searchRadius = radius || 10000; // meters
+    const vehicleSpeed = 30; // km/h
+
+    // Build base query for all producer types
+    const query = ProducerRepository.createQueryBuilder("producer")
+        .innerJoin("producer.user", "user")
+        .addSelect(
+            `ST_Distance(
+        "producer"."locationPoint"::geography,
+        ST_SetSRID(ST_MakePoint(:longitude, :latitude), 4326)::geography
+      )`,
+            "distance"
+        )
+        .where(
+            `ST_DWithin(
+        "producer"."locationPoint"::geography,
+        ST_SetSRID(ST_MakePoint(:longitude, :latitude), 4326)::geography,
+        :searchRadius
+      )`,
+            { longitude, latitude, searchRadius }
+        )
+        .andWhere("producer.isDeleted = false")
+        .andWhere("producer.isActive = true")
+        .andWhere("user.isActive = true")
+        .andWhere("user.isDeleted = false")
+        // fixed column name here:
+        .andWhere("producer.name ILIKE :keyword", { keyword: `%${keyword}%` })
+        .skip((page - 1) * limit)
+        .take(limit)
+        .orderBy("distance", "ASC");
+
+    // Optional filter by producerType (mapped to your enum field `type`)
+    if (producerType) {
+        query.andWhere("producer.type = :producerType", { producerType });
+    }
+
+    // Execute query
+    const [entities, total] = await query.getManyAndCount();
+    const { raw } = await query.getRawAndEntities();
+
+    const producers = entities.map((p: any, i: any) => {
+        const distanceInMeters = parseFloat(raw[i].distance);
+        const distanceInKm = distanceInMeters / 1000;
+        const etaMinutes = Math.round((distanceInKm / vehicleSpeed) * 60);
+
+        return {
+            id: p.id,
+            name: p.name,
+            type: p.type, // BusinessRole enum (restaurant, leisure, wellness)
+            latitude: p.latitude,
+            longitude: p.longitude,
+            address: p.address,
+            profileImage: p.user?.profileImageUrl || null,
+            distance: Math.round(distanceInMeters),
+            etaInMinutes: etaMinutes,
+        };
+    });
+
+    return {
+        producers,
+        totalProducers: total,
+        currentPage: page,
+        totalPages: Math.ceil(total / limit),
     };
 };
 

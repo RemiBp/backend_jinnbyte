@@ -180,6 +180,12 @@ export const setGalleryImagesSchema = z.object({
 
 export type SetGalleryImages = z.infer<typeof setGalleryImagesSchema>;
 
+export const deleteGalleryImagesSchema = z.object({
+  photoIds: z.array(z.number().int().positive()).min(1, "At least one photo ID is required"),
+});
+
+export type DeleteGalleryImages = z.infer<typeof deleteGalleryImagesSchema>;
+
 export const setMainImageSchema = z.object({
   restaurantId: z.number({ required_error: 'restaurantId is required' }),
   imageId: z.number({ required_error: 'imageId is required' }),

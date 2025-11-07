@@ -11,8 +11,10 @@ export const userSignUpSchema = z.object({
     .transform(val => val.toLowerCase()),
   password: z.string({ required_error: 'Password is required' }).trim()
     .min(1, 'Password is required'),
-  phoneNumber: z.string({ required_error: 'Phone number is required' }).trim()
-    .regex(/^\d{10}$/, 'Phone number must be exactly 10 digits'),
+  phoneNumber: z
+    .string({ required_error: "Phone number is required" })
+    .trim()
+    .regex(/^\d{7,15}$/, { message: "Phone number must contain between 7 and 15 digits" }),
 });
 
 export type UserSignUp = z.infer<typeof userSignUpSchema>;

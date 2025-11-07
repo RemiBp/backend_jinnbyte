@@ -61,12 +61,25 @@ export const deleteEventSchema = z.object({
 export type DeleteEventInput = z.infer<typeof deleteEventSchema>;
 
 export const GetAllEventsSchema = z.object({
-  status: z.string().optional(),
-  category: z.string().optional(),
-  type: z.nativeEnum(ServiceType).optional(),
-  lat: z.coerce.number().optional(),
-  lng: z.coerce.number().optional(),
-  radius: z.coerce.number().optional(),
+    status: z.string().optional(),
+    category: z.string().optional(),
+    type: z.nativeEnum(ServiceType).optional(),
+    lat: z.coerce.number().optional(),
+    lng: z.coerce.number().optional(),
+    radius: z.coerce.number().optional(),
 });
 
 export type GetAllEventsInput = z.infer<typeof GetAllEventsSchema>;
+
+export const findProducersNearbySchema = z.object({
+    userId: z.number({ required_error: "userId is required" }),
+    latitude: z.number({ required_error: "latitude is required" }),
+    longitude: z.number({ required_error: "longitude is required" }),
+    keyword: z.string().optional(),
+    page: z.number().optional().default(1),
+    limit: z.number().optional().default(10),
+    radius: z.number().optional().default(10000), // meters
+    producerType: z.enum(["restaurant", "leisure", "wellness"]).optional(),
+});
+
+export type FindProducersNearbySchema = z.infer<typeof findProducersNearbySchema>;
