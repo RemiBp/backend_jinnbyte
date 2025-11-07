@@ -66,6 +66,16 @@ export const getProfile = async (req: Request, res: Response, next: NextFunction
   }
 };
 
+export const getProfileById = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const producerId = Number(req.params.producerId);
+    const profile = await ProfileService.getProfileById(producerId);
+    return sendApiResponse(res, 200, "Producer profile fetched successfully.", profile);
+  } catch (error) {
+    next(error);
+  }
+};
+
 export const deleteProfile = async (req: Request, res: Response, next: NextFunction) => {
   try {
     const userId = Number(req.userId);

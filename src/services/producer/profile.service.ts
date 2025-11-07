@@ -41,6 +41,9 @@ import {
   WellnessServiceTypeRepository,
   MenuCategoryRepository,
   MenuDishesRepository,
+  PostRepository,
+  FollowRepository,
+  EventRepository,
 } from '../../repositories';
 import { hashPassword } from '../../utils/PasswordUtils';
 import s3Service from '../s3.service';
@@ -193,6 +196,37 @@ export const getProfile = async (userId: number) => {
   return {
     producer: user.producer || null,
     businessProfile,
+  };
+};
+
+export const getProfileById = async (producerId: number) => {
+  const producer = await ProducerRepository.findOne({
+    where: { id: producerId },
+    relations: [
+      "user",
+      "posts",
+      "followers",
+      "photos",
+      "cuisineType",
+    ],
+  });
+
+  if (!producer) throw new NotFoundError("Producer not found.");
+
+  const [postCount, followerCount, eventCount] = await Promise.all([
+    PostRepository.count({ where: { producer: { id: producerId } } }),
+    FollowRepository.count({ where: { producer: { id: producerId } } }),
+    EventRepository.count({ where: { producer: { id: producerId } } }),
+  ]);
+
+  // Just return all data — no manual mapping
+  return {
+    producer,
+    stats: {
+      posts: postCount,
+      followers: followerCount,
+      events: eventCount,
+    },
   };
 };
 

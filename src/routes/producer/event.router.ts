@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { EventController } from '../../controllers/producer/event.controller';
 import { authenticateBothJWT, authenticateJWT, checkStatus } from '../../middlewares/auth.middleware';
+import { ProfileController } from '../../controllers/producer/profile.controller';
 
 const ProducerEventRouter = Router();
 ProducerEventRouter.get('/', (req, res) => {
@@ -13,6 +14,9 @@ ProducerEventRouter.use(checkStatus);
 // User-side (Explore)
 ProducerEventRouter.get('/getAllEvents', EventController.getAllEvents);
 ProducerEventRouter.get('/getEventById/:eventId', EventController.getEventById);
+ProducerEventRouter.post('/findNearbyProducer', EventController.findNearbyProducer);
+ProducerEventRouter.get('/getProfileById/:producerId', ProfileController.getProfileById);
+
 
 ProducerEventRouter.use(authenticateJWT);
 ProducerEventRouter.use(checkStatus);

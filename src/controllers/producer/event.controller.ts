@@ -61,6 +61,28 @@ export const getEventById = async (req: Request, res: Response, next: NextFuncti
     }
 };
 
+export const findNearbyProducer = async (req: Request, res: Response, next: NextFunction) => {
+    try {
+        const userId = Number(req.userId);
+        const { latitude, longitude, keyword, radius, page, limit, producerType } = req.body;
+
+        const response = await EventService.findNearbyProducer({
+            userId,
+            latitude,
+            longitude,
+            keyword,
+            radius,
+            page,
+            limit,
+            producerType,
+        });
+
+        return sendApiResponse(res, 200, "Nearby producers fetched successfully", response);
+    } catch (error) {
+        next(error);
+    }
+};
+
 export const updateEvent = async (req: Request, res: Response, next: NextFunction) => {
     try {
         const userId = req.userId;
