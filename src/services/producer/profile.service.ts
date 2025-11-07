@@ -43,10 +43,7 @@ import {
   MenuDishesRepository,
   PostRepository,
   FollowRepository,
-<<<<<<< HEAD
-=======
   EventRepository,
->>>>>>> origin/main
 } from '../../repositories';
 import { hashPassword } from '../../utils/PasswordUtils';
 import s3Service from '../s3.service';
