@@ -36,16 +36,19 @@ export default class Event {
     @Column()
     endTime: string;
 
+    @Column({ type: 'varchar', length: 100, default: 'UTC' })
+    timeZone: string; // e.g. "Europe/Paris" | "Asia/Karachi"
+
     @Column({ nullable: true })
-    venueName: string
+    venueName: string;
 
     @Column({ nullable: true })
     location: string;
 
-    @Column("decimal", { precision: 9, scale: 6, nullable: true })
+    @Column('decimal', { precision: 9, scale: 6, nullable: true })
     latitude: number;
 
-    @Column("decimal", { precision: 9, scale: 6, nullable: true })
+    @Column('decimal', { precision: 9, scale: 6, nullable: true })
     longitude: number;
 
     @Column({ type: 'enum', enum: ServiceType, nullable: true })
@@ -89,6 +92,9 @@ export default class Event {
     @ManyToOne(() => Producer, { onDelete: 'CASCADE' })
     @JoinColumn({ name: 'producerId' })
     producer: Producer;
+
+    @Column({ nullable: true })
+    producerId: number;
 
     @OneToMany(() => Interest, (interest) => interest.event)
     interests: Interest[];

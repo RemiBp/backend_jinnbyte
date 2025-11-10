@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { BookingController } from '../../controllers/app/booking.controller';
-import { authenticateJWT, authenticateUserJWT, checkStatus } from '../../middlewares/auth.middleware';
+import { authenticateUserJWT, checkStatus } from '../../middlewares/auth.middleware';
 
 const BookingRouter = Router();
 BookingRouter.get('/', (req, res) => {

@@ -1,13 +1,13 @@
 import { Router } from 'express';
 import { BookingController } from '../../controllers/producer/booking.controller';
-import { authenticateJWTForBooking, checkStatus } from '../../middlewares/booking.auth.middleware';
+import { authenticateBothJWT, checkStatus } from '../../middlewares/auth.middleware';
 
 const ProducerBookingRouter = Router();
 ProducerBookingRouter.get('/', (req, res) => {
   res.send('Hit Customer Booking route');
 });
 
-ProducerBookingRouter.use(authenticateJWTForBooking);
+ProducerBookingRouter.use(authenticateBothJWT);
 ProducerBookingRouter.use(checkStatus);
 
 ProducerBookingRouter.post('/createBooking/:eventId', BookingController.createBooking);
