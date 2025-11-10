@@ -44,6 +44,7 @@ import Block from './Block';
 import Report from './Report';
 import Interest from './Interest';
 import LocationPrivacy from './LocationPrivacy';
+import ProfileViewLog from './ProfileViewLog';
 
 @Entity('Users')
 export default class User {
@@ -204,6 +205,9 @@ export default class User {
 
   @OneToMany(() => Follow, (follow) => follow.followedUser)
   followedByUsers: Follow[];
+
+  @OneToMany(() => ProfileViewLog, (viewLog) => viewLog.viewer)
+  profileViewLogs: ProfileViewLog[];
 
   @CreateDateColumn({ type: 'timestamptz', default: () => 'NOW()' })
   createdAt: Date;

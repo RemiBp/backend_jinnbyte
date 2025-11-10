@@ -64,6 +64,7 @@ import MenuDishes from '../models/MenuDishes';
 import ProducerDocument from '../models/ProducerDocument';
 import DishRating from '../models/DishRating';
 import LocationPrivacy from '../models/LocationPrivacy';
+import ProfileViewLog from '../models/ProfileViewLog';
 
 export const UserRepository = PostgresDataSource.getRepository(User);
 export const RolesRepository = PostgresDataSource.getRepository(Roles);
@@ -116,6 +117,7 @@ export const ReportRepository = PostgresDataSource.getRepository(Report);
 export const InterestRepository = PostgresDataSource.getRepository(Interest);
 export const InterestInviteRepository = PostgresDataSource.getRepository(InterestInvite);
 export const LocationPrivacyRepository = PostgresDataSource.getRepository(LocationPrivacy);
+export const ProfileViewLogRepository = PostgresDataSource.getRepository(ProfileViewLog);
 
 export const ChatRepository = PostgresDataSource.getRepository(Chat);
 export const MessageRepository = PostgresDataSource.getRepository(Message);

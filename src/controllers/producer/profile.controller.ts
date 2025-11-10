@@ -69,12 +69,15 @@ export const getProfile = async (req: Request, res: Response, next: NextFunction
 export const getProfileById = async (req: Request, res: Response, next: NextFunction) => {
   try {
     const producerId = Number(req.params.producerId);
-    const profile = await ProfileService.getProfileById(producerId);
+    const viewerId = req.userId;
+
+    const profile = await ProfileService.getProfileById(producerId, viewerId);
     return sendApiResponse(res, 200, "Producer profile fetched successfully.", profile);
   } catch (error) {
     next(error);
   }
 };
+
 
 export const deleteProfile = async (req: Request, res: Response, next: NextFunction) => {
   try {

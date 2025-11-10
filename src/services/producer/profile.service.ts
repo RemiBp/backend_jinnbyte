@@ -44,6 +44,7 @@ import {
   PostRepository,
   FollowRepository,
   EventRepository,
+  ProfileViewLogRepository,
 } from '../../repositories';
 import { hashPassword } from '../../utils/PasswordUtils';
 import s3Service from '../s3.service';
@@ -84,9 +85,7 @@ export const updateProfile = async (userId: number, updateProfileObject: UpdateP
       throw new NotFoundError("Profile not initialized for this user");
     }
 
-    // --------------------
     // Update Producer Info
-    // --------------------
     Object.assign(user.producer, {
       name: updateProfileObject.businessName,
       address: updateProfileObject.address,
@@ -104,9 +103,7 @@ export const updateProfile = async (userId: number, updateProfileObject: UpdateP
       user.phoneNumber = updateProfileObject.phoneNumber;
     }
 
-    // --------------------
     // Update BusinessProfile (socials)
-    // --------------------
     Object.assign(user.businessProfile, {
       instagram: updateProfileObject.instagram,
       twitter: updateProfileObject.twitter,
@@ -220,7 +217,7 @@ export const getProfile = async (userId: number) => {
   };
 };
 
-export const getProfileById = async (producerId: number) => {
+export const getProfileById = async (producerId: number, viewerId?: number) => {
   const producer = await ProducerRepository.findOne({
     where: { id: producerId },
     relations: [
@@ -234,19 +231,45 @@ export const getProfileById = async (producerId: number) => {
 
   if (!producer) throw new NotFoundError("Producer not found.");
 
+  // Skip if the viewer is the producer owner, Count only once per viewer per day
+  if (viewerId && viewerId !== producer.user?.id) {
+    const today = new Date().toISOString().slice(0, 10);
+
+    const alreadyViewed = await ProfileViewLogRepository.findOne({
+      where: { viewerId, producerId, date: today },
+    });
+
+    if (!alreadyViewed) {
+      // Increment atomic counter in producer table
+      await ProducerRepository.increment({ id: producerId }, "profileViews", 1);
+
+      // Store unique daily record
+      await ProfileViewLogRepository.save({
+        viewerId,
+        producerId,
+        date: today,
+      });
+
+      // Reflect updated count immediately in response
+      producer.profileViews = (producer.profileViews || 0) + 1;
+    }
+  }
+
+  // Fetch related stats in parallel
   const [postCount, followerCount, eventCount] = await Promise.all([
     PostRepository.count({ where: { producer: { id: producerId } } }),
     FollowRepository.count({ where: { producer: { id: producerId } } }),
     EventRepository.count({ where: { producer: { id: producerId } } }),
   ]);
 
-  // Just return all data — no manual mapping
+  // Return full producer entity + stats (same as before)
   return {
     producer,
     stats: {
       posts: postCount,
       followers: followerCount,
       events: eventCount,
+      profileViews: producer.profileViews,
     },
   };
 };

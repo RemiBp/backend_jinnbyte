@@ -26,6 +26,7 @@ import ProducerDocument from './ProducerDocument';
 import ProducerOffer from './ProducerOffer';
 import CuisineType from './CuisineType';
 import Interest from './Interest';
+import ProfileViewLog from './ProfileViewLog';
 
 @Entity('Producers')
 export default class Producer {
@@ -168,8 +169,11 @@ export default class Producer {
     @ManyToOne(() => CuisineType, cuisineType => cuisineType.producer)
     cuisineType: CuisineType;
 
-      @Column({ type: 'decimal', precision: 10, scale: 2, nullable: true })
-  slotDuration: number;
+    @Column({ type: 'decimal', precision: 10, scale: 2, nullable: true })
+    slotDuration: number;
+
+    @OneToMany(() => ProfileViewLog, (viewLog) => viewLog.producer)
+    profileViewLogs: ProfileViewLog[];
 
     @CreateDateColumn()
     createdAt: Date;
