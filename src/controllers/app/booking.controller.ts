@@ -10,8 +10,6 @@ import {
 } from '../../validators/app/booking.validation';
 import { CuisineTypeRepository } from '../../repositories';
 import { getRestaurantImagesSchema } from '../../validators/producer/profile.validation';
-import { BadRequestError } from '../../errors/badRequest.error';
-import { sendApiResponse } from '../../utils/sendApiResponse';
 
 export const findRestaurantsNearby = async (req: Request, res: Response, next: NextFunction) => {
   try {
@@ -215,23 +213,6 @@ export const cancel = async (req: Request, res: Response, next: NextFunction) =>
     }
     const response = await BookingService.cancel(userId, BookingId, cancelReason, timeZone);
     res.status(200).json(response);
-  } catch (error) {
-    next(error);
-  }
-};
-
-export const checkIn = async (req: Request, res: Response, next: NextFunction) => {
-  try {
-    const userId = Number(req.userId);
-    const bookingId = Number(req.params.id);
-    const timeZone = String(req.body.timeZone || "UTC");
-
-    if (!timeZone) {
-      throw new BadRequestError("timeZone is required");
-    }
-
-    const result = await BookingService.checkIn(userId, bookingId, timeZone);
-    return sendApiResponse(res, 200, "Checked in successfully", result);
   } catch (error) {
     next(error);
   }
