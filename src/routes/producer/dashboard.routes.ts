@@ -11,7 +11,10 @@ DashboardRouter.get("/overview", DashboardController.getOverview);
 DashboardRouter.get("/user-insights", DashboardController.getUserInsights);
 DashboardRouter.get("/trends", DashboardController.getTrends);
 DashboardRouter.get("/ratings", DashboardController.getRatings);
-DashboardRouter.get("/feedback", DashboardController.getFeedback);
-DashboardRouter.get("/benchmark", DashboardController.getBenchmark);
+DashboardRouter.get("/event-insights", DashboardController.getEventInsights);
+DashboardRouter.get("/dish-ratings", DashboardController.getDishRatings);
+DashboardRouter.get("/menu-overview", DashboardController.getMenuOverview);
+DashboardRouter.get("/dishDrop-alerts",DashboardController.getDishDropAlerts);
+
 
 export default DashboardRouter;

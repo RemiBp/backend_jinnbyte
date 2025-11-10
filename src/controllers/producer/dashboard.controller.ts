@@ -1,7 +1,7 @@
 // controllers/producer/dashboard.controller.ts
 import { Request, Response, NextFunction } from "express";
 import { DashboardService } from "../../services/producer/dashboard.service";
-import { getOverviewSchema, getUserInsightsSchema, getTrendsSchema, getRatingsSchema, getFeedbackSchema, getBenchmarkSchema } from "../../validators/producer/dashboard.validation";
+import { getOverviewSchema, getUserInsightsSchema, getTrendsSchema, getRatingsSchema, getFeedbackSchema, getBenchmarkSchema, getEventInsightsSchema, getDishRatingsSchema, getMenuOverviewSchema, getDishDropAlertsSchema } from "../../validators/producer/dashboard.validation";
 import { sendApiResponse } from "../../utils/sendApiResponse";
 
 export const getOverview = async (req: Request, res: Response, next: NextFunction) => {
@@ -52,25 +52,50 @@ export const getRatings = async (req: Request, res: Response, next: NextFunction
     }
 };
 
-export const getFeedback = async (req: Request, res: Response, next: NextFunction) => {
+export const getEventInsights = async (req: Request, res: Response, next: NextFunction) => {
     try {
         const userId = req.userId;
         const roleName = req.roleName;
-        const parsed = getFeedbackSchema.parse({ ...req.query, userId, roleName });
-        const data = await DashboardService.getFeedback(parsed);
-        return sendApiResponse(res, 200, "Feedback fetched successfully.", data);
+        const parsed = getEventInsightsSchema.parse({ ...req.query, userId, roleName });
+        const data = await DashboardService.getEventInsights(parsed);
+        return sendApiResponse(res, 200, "Event insights fetched successfully.", data);
     } catch (error) {
         next(error);
     }
 };
 
-export const getBenchmark = async (req: Request, res: Response, next: NextFunction) => {
+export const getDishRatings = async (req: Request, res: Response, next: NextFunction) => {
     try {
         const userId = req.userId;
         const roleName = req.roleName;
-        const parsed = getBenchmarkSchema.parse({ ...req.query, userId, roleName });
-        const data = await DashboardService.getBenchmark(parsed);
-        return sendApiResponse(res, 200, "Benchmark data fetched successfully.", data);
+        const parsed = getDishRatingsSchema.parse({ ...req.query, userId, roleName });
+        const data = await DashboardService.getDishRatings(parsed);
+        return sendApiResponse(res, 200, "Dish ratings fetched successfully.", data);
+    } catch (error) {
+        next(error);
+    }
+};
+
+export const getMenuOverview = async (req: Request, res: Response, next: NextFunction) => {
+    try {
+        const userId = req.userId;
+        const roleName = req.roleName;
+
+        const parsed = getMenuOverviewSchema.parse({ ...req.query, userId, roleName });
+        const data = await DashboardService.getMenuOverview(parsed);
+        return sendApiResponse(res, 200, "Menu overview fetched successfully.", data);
+    } catch (error) {
+        next(error);
+    }
+};
+
+export const getDishDropAlerts = async (req: Request, res: Response, next: NextFunction) => {
+    try {
+        const userId = req.userId;
+        const roleName = req.roleName;
+        const parsed = getDishDropAlertsSchema.parse({ ...req.query, userId, roleName });
+        const data = await DashboardService.getDishDropAlerts(parsed);
+        return sendApiResponse(res, 200, "Dish drop alerts fetched successfully.", data);
     } catch (error) {
         next(error);
     }
