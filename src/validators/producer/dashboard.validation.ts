@@ -11,9 +11,14 @@ export const baseDashboardSchema = z.object({
 
 export const getOverviewSchema = baseDashboardSchema;
 export const getUserInsightsSchema = baseDashboardSchema;
+
 export const getTrendsSchema = baseDashboardSchema.extend({
   metric: z.nativeEnum(DashboardMetricEnum).default(DashboardMetricEnum.BOOKINGS),
+  from: z.string().optional(),
+  to: z.string().optional(),
 });
+
+export type getTrendsInput = z.infer<typeof getTrendsSchema>;
 
 export const getEventInsightsSchema = z.object({
   userId: z.number({ required_error: "User ID is required" }),
@@ -26,6 +31,8 @@ export const getDishRatingsSchema = z.object({
   groupBy: z.enum(["category", "dish"]).default("category"),
   categoryId: z.string().optional(), // can come from query string
 });
+
+export type getDishRatingsInput = z.infer<typeof getDishRatingsSchema>;
 
 export const getCategoriesSchema = z.object({
   userId: z.number(),

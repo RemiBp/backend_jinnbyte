@@ -1,11 +1,12 @@
 // services/producer/dashboard.service.ts
 import { Between } from "typeorm";
-import { ProducerRepository, PostRepository, BookingRepository, PostRatingRepository, FollowRepository, InterestRepository, InterestInviteRepository, UserRepository, RestaurantRatingRepository, WellnessRepository, LeisureRepository, DishRatingRepository, MenuDishesRepository, ProfileViewLogRepository, MenuCategoryRepository } from "../../repositories";
+import { ProducerRepository, PostRepository, BookingRepository, PostRatingRepository, FollowRepository, InterestRepository, InterestInviteRepository, UserRepository, RestaurantRatingRepository, WellnessRepository, LeisureRepository, DishRatingRepository, MenuDishesRepository, ProfileViewLogRepository, MenuCategoryRepository, EventBookingRepository, PostLikeRepository } from "../../repositories";
 import { NotFoundError } from "../../errors/notFound.error";
 import dayjs from "dayjs";
 import { BusinessRole } from "../../enums/Producer.enum";
 import DishRating from "../../models/DishRating";
-import { GetCategoriesInput } from "../../validators/producer/dashboard.validation";
+import { GetCategoriesInput, getDishRatingsInput, getTrendsInput } from "../../validators/producer/dashboard.validation";
+import { DashboardMetricEnum } from "../../enums/DashboardMetric.enums";
 
 export const getOverview = async ({ userId }: { userId: number }) => {
     // Find producer
@@ -49,7 +50,7 @@ export const getOverview = async ({ userId }: { userId: number }) => {
 
     const totalPosts = posts.length;
     const totalEngagements = posts.reduce(
-        (sum: any, post: any) =>
+        (sum: number, post: { likesCount?: number, commentCount?: number, shareCount?: number }) =>
             sum +
             (post.likesCount || 0) +
             (post.commentCount || 0) +
@@ -139,76 +140,107 @@ export const getUserInsights = async ({ userId }: { userId: number }) => {
     };
 };
 
-export const getTrends = async ({ userId, metric = "interests", from, to }: { userId: number; metric?: string; from?: string; to?: string }) => {
+export const getTrends = async ({ userId, metric = DashboardMetricEnum.INTERESTS, from, to }: getTrendsInput) => {
     const producer = await ProducerRepository.findOneBy({ userId });
     if (!producer) throw new NotFoundError("Producer not found.");
 
-    // Determine weekly range (default = last 7 days)
-    const endDate = to ? new Date(to) : new Date();
-    const startDate = from ? new Date(from) : dayjs(endDate).subtract(6, "day").toDate();
+    const endDate = to ? dayjs(to).endOf("day").toDate() : dayjs().endOf("day").toDate();
+    const startDate = from
+        ? dayjs(from).startOf("day").toDate()
+        : dayjs(endDate).subtract(6, "day").startOf("day").toDate();
 
-    const lastWeekStart = dayjs(startDate).subtract(7, "day").toDate();
-    const lastWeekEnd = dayjs(startDate).subtract(1, "day").toDate();
+    const lastWeekStart = dayjs(startDate).subtract(7, "day").startOf("day").toDate();
+    const lastWeekEnd = dayjs(startDate).subtract(1, "day").endOf("day").toDate();
 
-    let currentWeekData: any[] = [];
-    let lastWeekData: any = {};
+    let currentWeekData: Array<{ day: string; count: string | number }> = [];
+    let lastWeekTotalRow: { count?: string | number } | null = null;
 
-    // Select correct data source based on metric
-    if (metric === "interests" || metric === "choices") {
-        // Interests in current week
-        currentWeekData = await InterestRepository.createQueryBuilder("i")
-            .select(`TO_CHAR(i."createdAt", 'DY')`, "day")
-            .addSelect("COUNT(*)", "count")
-            .where("i.producerId = :id", { id: producer.id })
-            .andWhere("i.createdAt BETWEEN :start AND :end", { start: startDate, end: endDate })
-            .groupBy("day")
-            .orderBy("MIN(i.createdAt)", "ASC")
-            .getRawMany();
+    switch (metric) {
+        case DashboardMetricEnum.INTERESTS:
+            currentWeekData = await InterestRepository.createQueryBuilder("Interest")
+                .select(`TO_CHAR("Interest"."createdAt", 'DY')`, "day")
+                .addSelect("COUNT(*)", "count")
+                .where(`"Interest"."producerId" = :producerId`, { producerId: producer.id })
+                .andWhere(`"Interest"."createdAt" BETWEEN :start AND :end`, { start: startDate, end: endDate })
+                .groupBy("day")
+                .getRawMany();
 
-        // Interests in last week
-        lastWeekData = await InterestRepository.createQueryBuilder("i")
-            .select("COUNT(*)", "count")
-            .where("i.producerId = :id", { id: producer.id })
-            .andWhere("i.createdAt BETWEEN :start AND :end", { start: lastWeekStart, end: lastWeekEnd })
-            .getRawOne();
+            lastWeekTotalRow = await InterestRepository.createQueryBuilder("Interest")
+                .select("COUNT(*)", "count")
+                .where(`"Interest"."producerId" = :producerId`, { producerId: producer.id })
+                .andWhere(`"Interest"."createdAt" BETWEEN :start AND :end`, { start: lastWeekStart, end: lastWeekEnd })
+                .getRawOne();
+            break;
 
-    } else if (metric === "choicesMade") {
-        // Choices made (accepted invites) this week
-        currentWeekData = await InterestInviteRepository.createQueryBuilder("inv")
-            .select(`TO_CHAR(inv."createdAt", 'DY')`, "day")
-            .addSelect("COUNT(*)", "count")
-            .where("inv.status = :status", { status: "accepted" })
-            .andWhere("inv.createdAt BETWEEN :start AND :end", { start: startDate, end: endDate })
-            .groupBy("day")
-            .orderBy("MIN(inv.createdAt)", "ASC")
-            .getRawMany();
+        case DashboardMetricEnum.LIKES:
+            currentWeekData = await PostLikeRepository.createQueryBuilder("PostLike")
+                .leftJoin("PostLike.post", "Post")
+                .select(`TO_CHAR("PostLike"."createdAt", 'DY')`, "day")
+                .addSelect("COUNT(*)", "count")
+                .where(`"Post"."producerId" = :producerId`, { producerId: producer.id })
+                .andWhere(`"PostLike"."createdAt" BETWEEN :start AND :end`, { start: startDate, end: endDate })
+                .groupBy("day")
+                .getRawMany();
 
-        // Choices made last week
-        lastWeekData = await InterestInviteRepository.createQueryBuilder("inv")
-            .select("COUNT(*)", "count")
-            .where("inv.status = :status", { status: "accepted" })
-            .andWhere("inv.createdAt BETWEEN :start AND :end", { start: lastWeekStart, end: lastWeekEnd })
-            .getRawOne();
+            lastWeekTotalRow = await PostLikeRepository.createQueryBuilder("PostLike")
+                .leftJoin("PostLike.post", "Post")
+                .select("COUNT(*)", "count")
+                .where(`"Post"."producerId" = :producerId`, { producerId: producer.id })
+                .andWhere(`"PostLike"."createdAt" BETWEEN :start AND :end`, { start: lastWeekStart, end: lastWeekEnd })
+                .getRawOne();
+            break;
+
+        case DashboardMetricEnum.FOLLOWERS:
+            currentWeekData = await FollowRepository.createQueryBuilder("Follow")
+                .select(`TO_CHAR("Follow"."createdAt", 'DY')`, "day")
+                .addSelect("COUNT(*)", "count")
+                .where(`"Follow"."producerId" = :producerId`, { producerId: producer.id })
+                .andWhere(`"Follow"."createdAt" BETWEEN :start AND :end`, { start: startDate, end: endDate })
+                .groupBy("day")
+                .getRawMany();
+
+            lastWeekTotalRow = await FollowRepository.createQueryBuilder("Follow")
+                .select("COUNT(*)", "count")
+                .where(`"Follow"."producerId" = :producerId`, { producerId: producer.id })
+                .andWhere(`"Follow"."createdAt" BETWEEN :start AND :end`, { start: lastWeekStart, end: lastWeekEnd })
+                .getRawOne();
+            break;
+
+        case DashboardMetricEnum.BOOKINGS:
+            currentWeekData = await EventBookingRepository.createQueryBuilder("EventBooking")
+                .leftJoin("EventBooking.event", "Event")
+                .select(`TO_CHAR("EventBooking"."createdAt", 'DY')`, "day")
+                .addSelect("COUNT(*)", "count")
+                .where(`"Event"."producerId" = :producerId`, { producerId: producer.id })
+                .andWhere(`"EventBooking"."createdAt" BETWEEN :start AND :end`, { start: startDate, end: endDate })
+                .groupBy("day")
+                .getRawMany();
+
+            lastWeekTotalRow = await EventBookingRepository.createQueryBuilder("EventBooking")
+                .leftJoin("EventBooking.event", "Event")
+                .select("COUNT(*)", "count")
+                .where(`"Event"."producerId" = :producerId`, { producerId: producer.id })
+                .andWhere(`"EventBooking"."createdAt" BETWEEN :start AND :end`, { start: lastWeekStart, end: lastWeekEnd })
+                .getRawOne();
+            break;
+
+        default:
+            throw new NotFoundError(`Unsupported metric: ${metric}`);
     }
 
-    // Calculate total for current and last week
-    const currentTotal = currentWeekData.reduce((sum, d) => sum + Number(d.count), 0);
-    const lastTotal = Array.isArray(lastWeekData)
-        ? (lastWeekData.length > 0 ? Number(lastWeekData[0]?.count || 0) : 0)
-        : Number((lastWeekData as any)?.count || 0);
+    const currentTotal = currentWeekData.reduce((sum, d) => sum + Number(d.count || 0), 0);
+    const lastTotal = Number(lastWeekTotalRow?.count || 0);
 
-    // Calculate growth percentage
-    const changePercent = lastTotal === 0 ? currentTotal > 0 ? 100 : 0 : ((currentTotal - lastTotal) / lastTotal) * 100;
+    const changePercent =
+        lastTotal === 0 ? (currentTotal > 0 ? 100 : 0) : ((currentTotal - lastTotal) / lastTotal) * 100;
 
-    // Normalize weekly data (Mon–Sun)
     const weekDays = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
-    const series = weekDays.map((day) => ({
-        day,
-        value:
-            Number(
-                currentWeekData.find((d: any) => d.day.toLowerCase().startsWith(day.toLowerCase()))?.count || 0
-            ),
-    }));
+    const series = weekDays.map((day) => {
+        const row = currentWeekData.find(
+            (d) => String(d.day || "").toLowerCase().startsWith(day.toLowerCase())
+        );
+        return { day, value: Number(row?.count || 0) };
+    });
 
     return {
         metric,
@@ -220,7 +252,7 @@ export const getTrends = async ({ userId, metric = "interests", from, to }: { us
                     ? `Your ${metric} increased by ${changePercent.toFixed(1)}% this week.`
                     : `Your ${metric} decreased by ${Math.abs(changePercent).toFixed(1)}% this week.`,
         },
-        series, // Data for graph
+        series,
     };
 };
 
@@ -361,7 +393,7 @@ export const getEventInsights = async ({ userId }: { userId: number }) => {
     };
 };
 
-export const getDishRatings = async ({ userId, groupBy, categoryId }: { userId: number; groupBy?: "category" | "dish"; categoryId?: string }) => {
+export const getDishRatings = async ({ userId, groupBy, categoryId }: getDishRatingsInput) => {
     // get the producer for this user
     const producer = await ProducerRepository.findOne({
         where: { userId },

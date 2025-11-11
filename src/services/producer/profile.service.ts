@@ -175,28 +175,6 @@ export const updatePassword = async (userId: number, payload: UpdatePasswordSche
   }
 };
 
-// export const getProfile = async (userId: number) => {
-//   const user = await UserRepository.findOne({
-//     where: { id: userId },
-//     relations: ["producer", "businessProfile"],
-//   });
-
-//   if (!user) throw new NotFoundError("User not found");
-
-//   let businessProfile = null;
-
-//   if (user.businessProfile) {
-//     // Exclude specific fields using destructuring
-//     const { businessName, address, city, latitude, longitude, phoneNumber, ...rest } = user.businessProfile;
-//     businessProfile = rest;
-//   }
-
-//   return {
-//     producer: user.producer || null,
-//     businessProfile,
-//   };
-// };
-
 export const getProfile = async (userId: number) => {
   const producer = await ProducerRepository.findOne({
     where: { userId },
