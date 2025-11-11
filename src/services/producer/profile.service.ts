@@ -219,6 +219,7 @@ export const getProfile = async (userId: number) => {
 };
 
 export const getProfileById = async (producerId: number, viewerId?: number) => {
+  // Fetch producer with all required relations
   const producer = await ProducerRepository.findOne({
     where: { id: producerId },
     relations: ["user", "posts", "followers", "photos", "cuisineType"],
@@ -226,42 +227,43 @@ export const getProfileById = async (producerId: number, viewerId?: number) => {
 
   if (!producer) throw new NotFoundError("Producer not found.");
 
+  // Only count profile view if a valid viewer is visiting another producer
   if (viewerId && viewerId !== producer.user?.id) {
-    const today = new Date().toISOString().slice(0, 10);
+    const today = new Date().toISOString().slice(0, 10); // YYYY-MM-DD format
 
-    // check if this viewer has already viewed today
+    // Check if already viewed today
     const alreadyViewed = await ProfileViewLogRepository.findOne({
       where: { viewerId, producerId, date: today },
     });
 
-    // only increment and log if not already viewed
     if (!alreadyViewed) {
-      // safe insert (due to @Unique on [viewerId, producerId, date])
+      // Log view (safe insert if unique constraint exists)
       await ProfileViewLogRepository.createQueryBuilder()
         .insert()
         .values({ viewerId, producerId, date: today })
         .orIgnore()
         .execute();
 
-      // atomic increment on producer table
-      await ProducerRepository
-        .createQueryBuilder()
+      // Increment view count atomically (PostgreSQL-safe expression)
+      await ProducerRepository.createQueryBuilder()
         .update(Producer)
-        .set({ profileViews: () => `"profileViews" + 1` })
+        .set({ profileViews: () => "profileViews + 1" })
         .where("id = :id", { id: producerId })
         .execute();
 
-      // reflect updated count in response object
+      // Reflect in current response object
       producer.profileViews = (producer.profileViews || 0) + 1;
     }
   }
 
+  // Parallel count queries for stats
   const [postCount, followerCount, eventCount] = await Promise.all([
     PostRepository.count({ where: { producer: { id: producerId } } }),
     FollowRepository.count({ where: { producer: { id: producerId } } }),
     EventRepository.count({ where: { producer: { id: producerId } } }),
   ]);
 
+  // Final structured response
   return {
     producer,
     stats: {
