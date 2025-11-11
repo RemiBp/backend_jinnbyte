@@ -69,8 +69,257 @@ export const createBooking = async (userId: number, data: createBookingInput) =>
   };
 };
 
-export const getBookingsByUser = async (userId: number, timeZone?: string, status: string = "all") => {
-  // Validate user
+// export const getBookingsByUser = async (userId: number, timeZone: string, status: string = "all", page = 1, limit = 10) => {
+//   // Validate user
+//   const user = await UserRepository.findOne({
+//     where: { id: userId },
+//     relations: ["role"],
+//   });
+//   if (!user) throw new NotFoundError("User not found");
+
+//   const roleName = user.role?.name?.toLowerCase();
+//   const isProducer = ["restaurant", "producer", "leisure", "wellness"].includes(roleName);
+
+//   const now = DateTime.now().setZone(timeZone || "UTC");
+
+//   // Auto-complete expired in-progress bookings
+//   await EventBookingRepository.query(`
+//     UPDATE "EventBookings" eb
+//     SET "status" = 'completed'
+//     FROM "Events" e
+//     WHERE e.id = eb."eventId"
+//     AND eb."status" = 'inProgress'
+//     AND (
+//       (TO_TIMESTAMP(e.date || ' ' || e."endTime", 'YYYY-MM-DD HH24:MI') AT TIME ZONE e."timeZone")
+//       <= (NOW() AT TIME ZONE 'UTC')
+//     )
+//   `);
+
+//   await EventBookingRepository.query(`DISCARD ALL;`);
+
+//   // Load all bookings
+//   const whereCondition = isProducer
+//     ? { event: { producer: { user: { id: userId } } } }
+//     : { user: { id: userId } };
+
+//   const bookings = await EventBookingRepository.find({
+//     where: whereCondition,
+//     relations: ["event", "event.producer", "event.producer.user"],
+//     order: { createdAt: "DESC" },
+//   });
+
+//   // Map cleanly without manual reconstruction
+//   const results = await Promise.all(
+//     bookings.map(async (booking: any) => {
+//       const event = booking.event;
+//       const producer = event.producer;
+//       const eventZone = event.timeZone || "UTC";
+
+//       const eventStart = DateTime.fromISO(`${event.date}T${event.startTime}`, { zone: eventZone });
+//       const eventEnd = DateTime.fromISO(`${event.date}T${event.endTime}`, { zone: eventZone });
+//       const nowUTC = now.toUTC();
+
+//       // Auto move to completed if ended
+//       if (booking.status === BookingStatusEnums.IN_PROGRESS && nowUTC > eventEnd.toUTC()) {
+//         booking.status = BookingStatusEnums.COMPLETED;
+//         await EventBookingRepository.update(booking.id, {
+//           status: BookingStatusEnums.COMPLETED,
+//         });
+//       }
+
+//       // Return the direct 3-part structure
+//       return {
+//         booking: {
+//           ...booking,
+//           canCheckIn:
+//             booking.status === BookingStatusEnums.SCHEDULED &&
+//             nowUTC >= eventStart.toUTC() &&
+//             nowUTC <= eventEnd.toUTC(),
+//           canCancel:
+//             booking.status === BookingStatusEnums.SCHEDULED ||
+//             booking.status === BookingStatusEnums.IN_PROGRESS,
+//         },
+//         // event,
+//         producer,
+//       };
+//     })
+//   );
+
+//   // Optional filtering by status tab
+//   const filtered =
+//     status === "all"
+//       ? results
+//       : results.filter(({ booking }) => {
+//         switch (status) {
+//           case "scheduled": return booking.status === BookingStatusEnums.SCHEDULED;
+//           case "inProgress": return booking.status === BookingStatusEnums.IN_PROGRESS;
+//           case "completed": return booking.status === BookingStatusEnums.COMPLETED;
+//           case "cancelled": return booking.status === BookingStatusEnums.CANCEL;
+//           default: return true;
+//         }
+//       });
+
+//       //Restaurant Bookings
+//     let restaurantBookings: any[] = [];
+//     let currentTime = getCurrentTimeInUTCFromTimeZone(timeZone);
+//     let total = 0;
+//     let totalPages = 0;
+//     let canCancel = false;
+//     let canCheckIn = false;
+//       const nowIso = getCurrentTimeInUTCFromTimeZone(timeZone);
+//     const bookingsToUpdate = await BookingRepository.find({
+//       where: {
+//         restaurant: { id: user.id },
+//         endDateTime: LessThan(nowIso),
+//         status: 'scheduled'
+//       },
+//       order: { id: 'DESC' },
+//       skip: (page - 1) * limit,
+//       take: limit,
+//     });
+//     const bookingIdsToUpdate = bookingsToUpdate
+//       .map((booking: { id: any }) => booking.id);
+
+//     if (bookingIdsToUpdate.length > 0) {
+//       await BookingRepository.createQueryBuilder()
+//         .update()
+//         .set({ status: 'cancelled', cancelReason: 'Cancelled by system because its overdue and no action was taken' })
+//         .whereInIds(bookingIdsToUpdate)
+//         .execute();
+//     }
+//     switch (status) {
+//       case 'scheduled':
+//         const scheduledBookings = await BookingRepository.findAndCount({
+//           where: {
+//             restaurant: {
+//               id: user.id,
+//             },
+//             status: 'scheduled',
+//             endDateTime: MoreThan(currentTime),
+//           },
+//           relations: ['customer', 'restaurant', 'restaurant.restaurant'],
+//           order: {
+//             startDateTime: 'ASC',
+//           },
+//           skip: (page - 1) * limit,
+//           take: limit,
+//         });
+//         const mapScheduledBookings = scheduledBookings[0].map((booking: { status: string; startDateTime: string; endDateTime: string }) => {
+//           if (booking.status === 'scheduled') {
+//             canCancel = true;
+//           }
+//           if (booking.startDateTime <= currentTime && booking.endDateTime > currentTime) {
+//             canCheckIn = true;
+//           }
+
+//           return { ...booking, canCancel, canCheckIn };
+//         });
+//         restaurantBookings = mapScheduledBookings || [];
+//         total = scheduledBookings[1] || 0;
+//         totalPages = Math.ceil(total / limit);
+//         break;
+
+//       case 'inProgress':
+//         let inProgressBookings = await BookingRepository.findAndCount({
+//           where: {
+//             restaurant: {
+//               id: user.id,
+//             },
+//             status: In(['inProgress']),
+//           },
+//           relations: ['customer', 'restaurant', 'restaurant.restaurant'],
+//           order: {
+//             id: 'DESC',
+//           },
+//         });
+//         const inProgressBookingMap = inProgressBookings[0].map((booking: { status: string }) => {
+//           canCancel = true;
+//           canCheckIn = false;
+//           return { ...booking, canCancel, canCheckIn };
+//         });
+//         restaurantBookings = inProgressBookingMap ? inProgressBookingMap : [];
+//         total = inProgressBookings[1] || 0;
+//         totalPages = Math.ceil(total / limit);
+//         break;
+
+//       case 'completed':
+//         const nowIso = getCurrentTimeInUTCFromTimeZone(timeZone);
+//         const [bookingsToUpdate, countToUpdate] = await BookingRepository.findAndCount({
+//           where: {
+//             restaurant: { id: user.id },
+//             endDateTime: LessThan(nowIso),
+//             status: Not(In(['cancelled', 'scheduled'])),
+//           },
+//           relations: ['customer', 'restaurant', 'restaurant.restaurant'],
+//           order: { id: 'DESC' },
+//           skip: (page - 1) * limit,
+//           take: limit,
+//         });
+//         const bookingIdsToUpdate = bookingsToUpdate
+//           .filter((booking: { status: string }) => booking.status !== 'completed')
+//           .map((booking: { id: any }) => booking.id);
+
+//         if (bookingIdsToUpdate.length > 0) {
+//           await BookingRepository.createQueryBuilder()
+//             .update()
+//             .set({ status: 'completed' })
+//             .whereInIds(bookingIdsToUpdate)
+//             .execute();
+//         }
+//         restaurantBookings = bookingsToUpdate.map((booking: any) => ({
+//           ...booking,
+//           status: 'completed',
+//           canCancel: false,
+//           canCheckIn: false,
+//         }));
+//         total = countToUpdate;
+//         totalPages = Math.ceil(total / limit);
+//         break;
+//       case 'cancelled':
+//         const cancelledbookings = await BookingRepository.findAndCount({
+//           where: {
+//             restaurant: {
+//               id: user.id,
+//             },
+//             status: 'cancelled',
+//           },
+//           relations: ['customer', 'restaurant', 'restaurant.restaurant'],
+//           order: {
+//             id: 'DESC',
+//           },
+//           skip: (page - 1) * limit,
+//           take: limit,
+//         });
+//         const mapCancelledBookings = cancelledbookings[0].map((booking: { status: string; startDateTime: string }) => {
+//           let canCancel = false;
+//           let canCheckIn = false;
+//           return { ...booking, canCancel, canCheckIn };
+//         });
+//         restaurantBookings = mapCancelledBookings || [];
+//         total = cancelledbookings[1] || 0;
+//         totalPages = Math.ceil(total / limit);
+//         break;
+
+//       default:
+//         throw new BadRequestError('Invalid booking type requested');
+//     }
+
+
+//   return { eventBookings: filtered, restaurantBookings, total, currentPage: page, totalPages};
+
+
+  
+// };
+
+
+export const getBookingsByUser = async (
+  userId: number,
+  timeZone: string,
+  status: string = "all",
+  page = 1,
+  limit = 10
+) => {
+  // 1️⃣ Validate User
   const user = await UserRepository.findOne({
     where: { id: userId },
     relations: ["role"],
@@ -82,44 +331,40 @@ export const getBookingsByUser = async (userId: number, timeZone?: string, statu
 
   const now = DateTime.now().setZone(timeZone || "UTC");
 
-  // Auto-complete expired in-progress bookings
+  // 2️⃣ Auto-complete expired in-progress event bookings
   await EventBookingRepository.query(`
     UPDATE "EventBookings" eb
     SET "status" = 'completed'
     FROM "Events" e
     WHERE e.id = eb."eventId"
-    AND eb."status" = 'inProgress'
-    AND (
-      (TO_TIMESTAMP(e.date || ' ' || e."endTime", 'YYYY-MM-DD HH24:MI') AT TIME ZONE e."timeZone")
-      <= (NOW() AT TIME ZONE 'UTC')
-    )
+      AND eb."status" = 'inProgress'
+      AND (
+        (TO_TIMESTAMP(e.date || ' ' || e."endTime", 'YYYY-MM-DD HH24:MI') AT TIME ZONE e."timeZone")
+        <= (NOW() AT TIME ZONE 'UTC')
+      )
   `);
-
   await EventBookingRepository.query(`DISCARD ALL;`);
 
-  // Load all bookings
+  // 3️⃣ Fetch all event bookings
   const whereCondition = isProducer
     ? { event: { producer: { user: { id: userId } } } }
     : { user: { id: userId } };
 
-  const bookings = await EventBookingRepository.find({
+  const eventBookings = await EventBookingRepository.find({
     where: whereCondition,
     relations: ["event", "event.producer", "event.producer.user"],
     order: { createdAt: "DESC" },
   });
 
-  // Map cleanly without manual reconstruction
-  const results = await Promise.all(
-    bookings.map(async (booking: any) => {
-      const event = booking.event;
-      const producer = event.producer;
+  const mappedEventBookings = await Promise.all(
+    eventBookings.map(async (booking: any) => {
+      const { event } = booking;
       const eventZone = event.timeZone || "UTC";
-
       const eventStart = DateTime.fromISO(`${event.date}T${event.startTime}`, { zone: eventZone });
       const eventEnd = DateTime.fromISO(`${event.date}T${event.endTime}`, { zone: eventZone });
       const nowUTC = now.toUTC();
 
-      // Auto move to completed if ended
+      // Auto update expired in-progress bookings
       if (booking.status === BookingStatusEnums.IN_PROGRESS && nowUTC > eventEnd.toUTC()) {
         booking.status = BookingStatusEnums.COMPLETED;
         await EventBookingRepository.update(booking.id, {
@@ -127,7 +372,6 @@ export const getBookingsByUser = async (userId: number, timeZone?: string, statu
         });
       }
 
-      // Return the direct 3-part structure
       return {
         booking: {
           ...booking,
@@ -139,28 +383,127 @@ export const getBookingsByUser = async (userId: number, timeZone?: string, statu
             booking.status === BookingStatusEnums.SCHEDULED ||
             booking.status === BookingStatusEnums.IN_PROGRESS,
         },
-        // event,
-        producer,
+        producer: event.producer,
       };
     })
   );
 
-  // Optional filtering by status tab
-  const filtered =
+  // 4️⃣ Filter event bookings by status
+  const filteredEventBookings =
     status === "all"
-      ? results
-      : results.filter(({ booking }) => {
-        switch (status) {
-          case "scheduled": return booking.status === BookingStatusEnums.SCHEDULED;
-          case "inProgress": return booking.status === BookingStatusEnums.IN_PROGRESS;
-          case "completed": return booking.status === BookingStatusEnums.COMPLETED;
-          case "cancelled": return booking.status === BookingStatusEnums.CANCEL;
-          default: return true;
-        }
-      });
+      ? mappedEventBookings
+      : mappedEventBookings.filter(({ booking }) => {
+          switch (status) {
+            case "scheduled": return booking.status === BookingStatusEnums.SCHEDULED;
+            case "inProgress": return booking.status === BookingStatusEnums.IN_PROGRESS;
+            case "completed": return booking.status === BookingStatusEnums.COMPLETED;
+            case "cancelled": return booking.status === BookingStatusEnums.CANCEL;
+            default: return true;
+          }
+        });
 
-  return filtered;
+  // 5️⃣ Handle restaurant bookings (same structure as eventBookings)
+  let restaurantBookings: any[] = [];
+  let total = 0;
+  let totalPages = 0;
+  const nowIso = getCurrentTimeInUTCFromTimeZone(timeZone);
+
+  const restaurantWhereBase = { restaurant: { id: user.id } };
+  const paginationOptions = {
+    skip: (page - 1) * limit,
+    take: limit,
+    relations: ["customer", "restaurant", "restaurant.producer", "restaurant.producer.user"],
+    order: { id: "DESC" as const },
+  };
+
+  // Auto-cancel overdue restaurant bookings
+  const overdue = await BookingRepository.find({
+    where: {
+      ...restaurantWhereBase,
+      endDateTime: LessThan(nowIso),
+      status: "scheduled",
+    },
+  });
+
+  if (overdue.length > 0) {
+    await BookingRepository.createQueryBuilder()
+      .update()
+      .set({
+        status: "cancelled",
+        cancelReason: "Cancelled automatically: booking overdue with no action taken",
+      })
+      .whereInIds(overdue.map((b: { id: any }) => b.id))
+      .execute();
+  }
+
+  // Define filters by status
+  const statusFilters: Record<string, any> = {
+    scheduled: {
+      ...restaurantWhereBase,
+      status: "scheduled",
+      endDateTime: MoreThan(nowIso),
+    },
+    inProgress: {
+      ...restaurantWhereBase,
+      status: In(["inProgress"]),
+    },
+    completed: {
+      ...restaurantWhereBase,
+      endDateTime: LessThan(nowIso),
+      status: Not(In(["cancelled", "scheduled"])),
+    },
+    cancelled: {
+      ...restaurantWhereBase,
+      status: "cancelled",
+    },
+  };
+
+  if (!statusFilters[status]) throw new BadRequestError("Invalid booking type requested");
+
+  const [foundBookings, count] = await BookingRepository.findAndCount({
+    where: statusFilters[status],
+    ...paginationOptions,
+  });
+
+  // Auto mark completed bookings
+  if (status === "completed") {
+    const toComplete = foundBookings.filter((b: { status: string; }) => b.status !== "completed");
+    if (toComplete.length > 0) {
+      await BookingRepository.createQueryBuilder()
+        .update()
+        .set({ status: "completed" })
+        .whereInIds(toComplete.map((b: { id: any; }) => b.id))
+        .execute();
+    }
+  }
+
+  restaurantBookings = foundBookings.map((booking: any) => {
+    const canCancel = ["scheduled", "inProgress"].includes(booking.status);
+    const canCheckIn =
+      booking.status === "scheduled" &&
+      booking.startDateTime <= nowIso &&
+      booking.endDateTime > nowIso;
+
+    return {
+      booking: {
+        ...booking,
+        canCancel,
+        canCheckIn,
+      },
+      producer: booking.restaurant?.producer || null, // same structure as eventBookings
+    };
+  });
+
+  total = count;
+  totalPages = Math.ceil(total / limit);
+
+  // 6️⃣ Final consistent response
+  return {
+    eventBookings: filteredEventBookings, // not paginated
+    restaurantBookings,
+  };
 };
+
 
 export const getBookingById = async (id: number, userId: number) => {
   const booking = await EventBookingRepository.findOne({

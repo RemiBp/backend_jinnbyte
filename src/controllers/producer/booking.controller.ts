@@ -27,8 +27,10 @@ export const getUserBookings = async (req: Request, res: Response, next: NextFun
     const userId = req.userId;
     const timeZone = String(req.query.timeZone || "UTC");
     const status = String(req.query.status || "all"); //add status param
+    const page = Number(req.query.page) || 1;
+    const limit = Number(req.query.limit) || 10;
 
-    const result = await BookingService.getBookingsByUser(userId, timeZone, status);
+    const result = await BookingService.getBookingsByUser(userId, timeZone, status, page, limit);
 
     return sendApiResponse(res, 200, "Bookings fetched successfully", result);
   } catch (error) {
