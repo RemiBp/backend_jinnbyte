@@ -14,43 +14,152 @@ import { NotificationStatusCode } from '../../enums/NotificationStatusCode.enum'
 import { getCurrentTimeInUTCFromTimeZone } from '../../utils/getTime';
 import { sendAdminNotification } from '../../utils/sendAdminNotification';
 import { UnauthorizedError } from '../../errors/unauthorized.error';
+import { BookingStatusEnums } from '../../enums/bookingStatus.enum';
+import { createBookingInput } from '../../validators/producer/booking.validation';
+import { DateTime } from 'luxon';
 
-export const createBooking = async (userId: number, eventId: number, data: { numberOfPersons: number }) => {
+export const createBooking = async (userId: number, data: createBookingInput) => {
+  const { eventId, guestCount } = data;
+
   const event = await EventRepository.findOneBy({ id: eventId });
-  if (!event || event.isDeleted) throw new NotFoundError('Event not found');
+  if (!event || event.isDeleted) throw new NotFoundError("Event not found");
+  if (!event.isActive) throw new BadRequestError("This event is not active.");
 
-  const totalBooked = await EventBookingRepository
-    .createQueryBuilder('booking')
-    .select('SUM(booking.numberOfPersons)', 'sum')
-    .where('booking.eventId = :eventId AND booking.isCancelled = false', { eventId })
+  // combine event date + time to check if event is already over
+  const eventEnd = new Date(`${event.date}T${event.endTime}Z`);
+  const now = new Date(getCurrentTimeInUTCFromTimeZone("UTC"));
+
+  if (eventEnd <= now) {
+    throw new BadRequestError("This event has already ended. Booking is not allowed.");
+  }
+
+  // Capacity check
+  const totalBooked = await EventBookingRepository.createQueryBuilder("booking")
+    .select("SUM(booking.numberOfPersons)", "sum")
+    .where("booking.eventId = :eventId AND booking.status != :status", {
+      eventId,
+      status: BookingStatusEnums.CANCEL,
+    })
     .getRawOne();
 
   const currentCount = Number(totalBooked.sum) || 0;
-  if (event.maxCapacity && currentCount + data.numberOfPersons > event.maxCapacity) {
-    throw new BadRequestError('Booking exceeds event capacity');
+  if (event.maxCapacity && currentCount + guestCount > event.maxCapacity) {
+    throw new BadRequestError("Booking exceeds event capacity");
   }
 
+  // Pricing logic
+  const totalPrice = guestCount * Number(event.pricePerGuest || 0);
+
+  // Create booking
   const booking = EventBookingRepository.create({
     user: { id: userId },
     event: { id: eventId },
-    numberOfPersons: data.numberOfPersons,
+    numberOfPersons: guestCount,
+    totalPrice,
+    status: BookingStatusEnums.SCHEDULED, // Upcoming by default
   });
 
   await EventBookingRepository.save(booking);
 
   return {
-    message: 'Booking confirmed',
-    totalAmount: data.numberOfPersons * Number(event.pricePerGuest),
+    message: "Booking confirmed",
     bookingId: booking.id,
+    totalAmount: totalPrice,
+    status: booking.status,
   };
 };
 
-export const getBookingsByUser = async (userId: number) => {
-  return EventBookingRepository.find({
-    where: { user: { id: userId } },
-    relations: ['event'],
-    order: { createdAt: 'DESC' },
+export const getBookingsByUser = async (userId: number, timeZone?: string, status: string = "all") => {
+  // Validate user
+  const user = await UserRepository.findOne({
+    where: { id: userId },
+    relations: ["role"],
   });
+  if (!user) throw new NotFoundError("User not found");
+
+  const roleName = user.role?.name?.toLowerCase();
+  const isProducer = ["restaurant", "producer", "leisure", "wellness"].includes(roleName);
+
+  const now = DateTime.now().setZone(timeZone || "UTC");
+
+  // Auto-complete expired in-progress bookings
+  await EventBookingRepository.query(`
+    UPDATE "EventBookings" eb
+    SET "status" = 'completed'
+    FROM "Events" e
+    WHERE e.id = eb."eventId"
+    AND eb."status" = 'inProgress'
+    AND (
+      (TO_TIMESTAMP(e.date || ' ' || e."endTime", 'YYYY-MM-DD HH24:MI') AT TIME ZONE e."timeZone")
+      <= (NOW() AT TIME ZONE 'UTC')
+    )
+  `);
+
+  await EventBookingRepository.query(`DISCARD ALL;`);
+
+  // Load all bookings
+  const whereCondition = isProducer
+    ? { event: { producer: { user: { id: userId } } } }
+    : { user: { id: userId } };
+
+  const bookings = await EventBookingRepository.find({
+    where: whereCondition,
+    relations: ["event", "event.producer", "event.producer.user"],
+    order: { createdAt: "DESC" },
+  });
+
+  // Map cleanly without manual reconstruction
+  const results = await Promise.all(
+    bookings.map(async (booking: any) => {
+      const event = booking.event;
+      const producer = event.producer;
+      const eventZone = event.timeZone || "UTC";
+
+      const eventStart = DateTime.fromISO(`${event.date}T${event.startTime}`, { zone: eventZone });
+      const eventEnd = DateTime.fromISO(`${event.date}T${event.endTime}`, { zone: eventZone });
+      const nowUTC = now.toUTC();
+
+      // Auto move to completed if ended
+      if (booking.status === BookingStatusEnums.IN_PROGRESS && nowUTC > eventEnd.toUTC()) {
+        booking.status = BookingStatusEnums.COMPLETED;
+        await EventBookingRepository.update(booking.id, {
+          status: BookingStatusEnums.COMPLETED,
+        });
+      }
+
+      // Return the direct 3-part structure
+      return {
+        booking: {
+          ...booking,
+          canCheckIn:
+            booking.status === BookingStatusEnums.SCHEDULED &&
+            nowUTC >= eventStart.toUTC() &&
+            nowUTC <= eventEnd.toUTC(),
+          canCancel:
+            booking.status === BookingStatusEnums.SCHEDULED ||
+            booking.status === BookingStatusEnums.IN_PROGRESS,
+        },
+        // event,
+        producer,
+      };
+    })
+  );
+
+  // Optional filtering by status tab
+  const filtered =
+    status === "all"
+      ? results
+      : results.filter(({ booking }) => {
+        switch (status) {
+          case "scheduled": return booking.status === BookingStatusEnums.SCHEDULED;
+          case "inProgress": return booking.status === BookingStatusEnums.IN_PROGRESS;
+          case "completed": return booking.status === BookingStatusEnums.COMPLETED;
+          case "cancelled": return booking.status === BookingStatusEnums.CANCEL;
+          default: return true;
+        }
+      });
+
+  return filtered;
 };
 
 export const getBookingById = async (id: number, userId: number) => {
@@ -65,50 +174,109 @@ export const getBookingById = async (id: number, userId: number) => {
   return booking;
 };
 
-export const cancelBooking = async (bookingId: number, userId: number) => {
+export const cancelBooking = async (bookingId: number, userId: number, reason: string) => {
   const booking = await EventBookingRepository.findOne({
     where: { id: bookingId },
-    relations: ['user'],
+    relations: ["user", "event"],
   });
 
-  if (!booking) throw new NotFoundError('Booking not found');
-  if (booking.user.id !== userId) throw new UnauthorizedError('Not your booking');
+  if (!booking) throw new NotFoundError("Booking not found");
+  if (booking.user.id !== userId) throw new UnauthorizedError("You do not own this booking");
 
-  if (booking.isCancelled) {
-    throw new BadRequestError('Booking is already cancelled');
+  // Validate current status
+  if (booking.status === BookingStatusEnums.CANCEL) {
+    throw new BadRequestError("Booking is already cancelled");
+  }
+  if (booking.status === BookingStatusEnums.COMPLETED) {
+    throw new BadRequestError("Completed bookings cannot be cancelled");
+  }
+  if (booking.status === BookingStatusEnums.IN_PROGRESS) {
+    throw new BadRequestError("You cannot cancel an ongoing event booking");
   }
 
-  if (booking.isCheckedIn) {
-    throw new BadRequestError('Checked-in bookings cannot be cancelled');
+  // Prevent cancellation if event already ended
+  const event = booking.event;
+  const now = new Date(getCurrentTimeInUTCFromTimeZone("UTC"));
+  const eventEnd = new Date(`${event.date}T${event.endTime}Z`);
+
+  if (eventEnd <= now) {
+    throw new BadRequestError("You cannot cancel — this event has already ended");
   }
 
-  booking.isCancelled = true;
+  // Update booking status and record reason
+  booking.status = BookingStatusEnums.CANCEL;
+  booking.internalNotes = reason;
+
   await EventBookingRepository.save(booking);
 
-  return { message: 'Booking cancelled successfully' };
+  return {
+    bookingId: booking.id,
+    reason,
+    status: booking.status,
+  };
 };
 
 export const checkInBooking = async (id: number, userId: number) => {
+  // Load booking with linked event + producer + user
   const booking = await EventBookingRepository.findOne({
     where: { id },
-    relations: ['user'],
+    relations: ["user", "event", "event.producer", "event.producer.user"],
   });
 
-  if (!booking) throw new NotFoundError('Booking not found');
-  if (booking.user.id !== userId) throw new UnauthorizedError('Not your booking');
+  if (!booking) throw new NotFoundError("Booking not found");
 
-  if (booking.isCancelled) {
-    throw new BadRequestError('Cancelled bookings cannot be checked-in');
+  const event = booking.event;
+
+  // Determine if current user is allowed
+  const isUserOwner = booking.user.id === userId;
+  const isProducerOwner = event.producer?.user?.id === userId;
+
+  if (!isUserOwner && !isProducerOwner) {
+    throw new UnauthorizedError("You are not authorized to check in this booking");
   }
 
-  if (booking.isCheckedIn) {
-    throw new BadRequestError('Already checked in');
+  // Use event’s own timezone for validation
+  const eventZone = event.timeZone || "UTC";
+  const now = DateTime.now().setZone(eventZone);
+  const eventStart = DateTime.fromISO(`${event.date}T${event.startTime}`, { zone: eventZone });
+  const eventEnd = DateTime.fromISO(`${event.date}T${event.endTime}`, { zone: eventZone });
+
+  // Not allowed if cancelled or completed
+  if (booking.status === BookingStatusEnums.CANCEL) {
+    throw new BadRequestError("You cannot check in for a cancelled booking");
+  }
+  if (booking.status === BookingStatusEnums.COMPLETED) {
+    throw new BadRequestError("This event is already completed");
   }
 
-  booking.isCheckedIn = true;
+  // Too early
+  if (now < eventStart) {
+    throw new BadRequestError("You cannot check in before the event starts");
+  }
+
+  // Too late
+  if (now > eventEnd) {
+    throw new BadRequestError("You cannot check in after the event has ended");
+  }
+
+  // Valid check-in → move to IN_PROGRESS
+  booking.status = BookingStatusEnums.IN_PROGRESS;
   await EventBookingRepository.save(booking);
 
-  return { message: 'Checked in successfully' };
+  return {
+    message: isUserOwner
+      ? "User check-in successful"
+      : "Producer check-in successful",
+    bookingId: booking.id,
+    status: booking.status,
+    event: {
+      title: event.title,
+      date: event.date,
+      startTime: event.startTime,
+      endTime: event.endTime,
+      timeZone: eventZone,
+    },
+  };
 };
 
 export const getBookings = async (userId: number, booking: string, timeZone: string, page = 1, limit = 10) => {

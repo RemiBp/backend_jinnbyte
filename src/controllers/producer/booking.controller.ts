@@ -2,31 +2,35 @@ import { NextFunction, Request, Response } from 'express';
 import { BookingService } from '../../services/producer/booking.service';
 import { bookingIdParamSchema, createBookingSchema } from '../../validators/producer/booking.validation';
 import { sendApiResponse } from '../../utils/sendApiResponse';
+import { BookingStatusEnums } from '../../enums/bookingStatus.enum';
+import { BadRequestError } from '../../errors/badRequest.error';
 
 export const createBooking = async (req: Request, res: Response, next: NextFunction) => {
   try {
     const userId = req.userId;
-    const eventId = Number(req.params.eventId);
-    const data = createBookingSchema.parse(req.body);
 
-    const bookingData = {
-      ...data,
-      numberOfPersons: data.guestCount,
-    };
+    const parsedData = createBookingSchema.parse({
+      ...req.body,
+      eventId: Number(req.params.eventId) || req.body.eventId,
+    });
 
-    const result = await BookingService.createBooking(userId, eventId, bookingData);
-    res.status(201).json(result);
+    const result = await BookingService.createBooking(userId, parsedData);
+
+    return sendApiResponse(res, 201, "Booking created successfully", result);
   } catch (error) {
     next(error);
   }
 };
 
-
 export const getUserBookings = async (req: Request, res: Response, next: NextFunction) => {
   try {
     const userId = req.userId;
-    const result = await BookingService.getBookingsByUser(userId);
-    res.status(200).json(result);
+    const timeZone = String(req.query.timeZone || "UTC");
+    const status = String(req.query.status || "all"); //add status param
+
+    const result = await BookingService.getBookingsByUser(userId, timeZone, status);
+
+    return sendApiResponse(res, 200, "Bookings fetched successfully", result);
   } catch (error) {
     next(error);
   }
@@ -38,7 +42,7 @@ export const getBookingById = async (req: Request, res: Response, next: NextFunc
     const userId = req.userId;
 
     const result = await BookingService.getBookingById(bookingId, userId);
-    res.status(200).json(result);
+    return sendApiResponse(res, 200, "Booking fetched successfully", result);
   } catch (error) {
     next(error);
   }
@@ -48,9 +52,15 @@ export const cancelBooking = async (req: Request, res: Response, next: NextFunct
   try {
     const bookingId = Number(req.params.id);
     const userId = req.userId;
+    const { reason } = req.body;
 
-    const result = await BookingService.cancelBooking(bookingId, userId);
-    res.status(200).json(result);
+    if (!reason || reason.trim().length === 0) {
+      throw new BadRequestError("Cancel reason is required.");
+    }
+
+    const result = await BookingService.cancelBooking(bookingId, userId, reason);
+
+    return sendApiResponse(res, 200, "Booking cancelled successfully", result);
   } catch (error) {
     next(error);
   }
@@ -59,13 +69,13 @@ export const cancelBooking = async (req: Request, res: Response, next: NextFunct
 
 export const checkIn = async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const bookingId = bookingIdParamSchema.parse(req.params).id;
+    const bookingId = Number(req.params.id);
     const userId = req.userId;
     if (!userId) {
-      throw new Error('userId is required');
+      throw new BadRequestError("User ID is required for check-in");
     }
     const result = await BookingService.checkInBooking(bookingId, userId);
-    res.status(200).json(result);
+    return sendApiResponse(res, 200, "Checked in successfully", result);
   } catch (error) {
     next(error);
   }
