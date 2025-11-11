@@ -27,6 +27,17 @@ export const getDishRatingsSchema = z.object({
   categoryId: z.string().optional(), // can come from query string
 });
 
+export const getCategoriesSchema = z.object({
+  userId: z.number(),
+  roleName: z.string().optional(),
+  search: z.string().trim().optional(),
+  includeCounts: z.coerce.boolean().default(true),
+  page: z.coerce.number().int().min(1).default(1),
+  limit: z.coerce.number().int().min(1).max(100).default(20),
+});
+
+export type GetCategoriesInput = z.infer<typeof getCategoriesSchema>;
+
 export const getMenuOverviewSchema = z.object({
   userId: z.number(),
   roleName: z.string(),

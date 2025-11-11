@@ -1,7 +1,7 @@
 // controllers/producer/dashboard.controller.ts
 import { Request, Response, NextFunction } from "express";
 import { DashboardService } from "../../services/producer/dashboard.service";
-import { getOverviewSchema, getUserInsightsSchema, getTrendsSchema, getRatingsSchema, getFeedbackSchema, getBenchmarkSchema, getEventInsightsSchema, getDishRatingsSchema, getMenuOverviewSchema, getDishDropAlertsSchema } from "../../validators/producer/dashboard.validation";
+import { getOverviewSchema, getUserInsightsSchema, getTrendsSchema, getRatingsSchema, getFeedbackSchema, getBenchmarkSchema, getEventInsightsSchema, getDishRatingsSchema, getMenuOverviewSchema, getDishDropAlertsSchema, getCategoriesSchema } from "../../validators/producer/dashboard.validation";
 import { sendApiResponse } from "../../utils/sendApiResponse";
 
 export const getOverview = async (req: Request, res: Response, next: NextFunction) => {
@@ -68,12 +68,26 @@ export const getDishRatings = async (req: Request, res: Response, next: NextFunc
     try {
         const userId = req.userId;
         const roleName = req.roleName;
-        const parsed = getDishRatingsSchema.parse({ ...req.query, userId, roleName });
+
+        const parsed = getDishRatingsSchema.parse({ ...req.query, userId, roleName, });
         const data = await DashboardService.getDishRatings(parsed);
         return sendApiResponse(res, 200, "Dish ratings fetched successfully.", data);
     } catch (error) {
         next(error);
     }
+};
+
+export const getCategories = async (req: Request,res: Response,next: NextFunction) => {
+  try {
+    const userId = req.userId;
+    const roleName = req.roleName;
+    
+    const parsed = getCategoriesSchema.parse({...req.query,userId,roleName});
+    const data = await DashboardService.getCategories(parsed);
+    return sendApiResponse(res, 200, "Categories fetched successfully.", data);
+  } catch (error) {
+    next(error);
+  }
 };
 
 export const getMenuOverview = async (req: Request, res: Response, next: NextFunction) => {

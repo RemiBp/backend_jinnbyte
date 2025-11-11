@@ -175,6 +175,9 @@ export default class Producer {
     @OneToMany(() => ProfileViewLog, (viewLog) => viewLog.producer)
     profileViewLogs: ProfileViewLog[];
 
+    @Column({ type: 'int', default: 0 })
+    profileViews: number;
+
     @CreateDateColumn()
     createdAt: Date;
 

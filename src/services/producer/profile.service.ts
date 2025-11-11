@@ -62,6 +62,7 @@ import MenuDishes from '../../models/MenuDishes';
 import PostgresDataSource from '../../data-source';
 import bcrypt from 'bcrypt';
 import { ForbiddenError } from '../../errors/forbidden.error';
+import Producer from '../../models/Producer';
 
 export const getAllServiceType = async () => {
   const serviceTypes = await WellnessServiceTypeRepository.find({
@@ -220,56 +221,54 @@ export const getProfile = async (userId: number) => {
 export const getProfileById = async (producerId: number, viewerId?: number) => {
   const producer = await ProducerRepository.findOne({
     where: { id: producerId },
-    relations: [
-      "user",
-      "posts",
-      "followers",
-      "photos",
-      "cuisineType",
-    ],
+    relations: ["user", "posts", "followers", "photos", "cuisineType"],
   });
 
   if (!producer) throw new NotFoundError("Producer not found.");
 
-  // Skip if the viewer is the producer owner, Count only once per viewer per day
   if (viewerId && viewerId !== producer.user?.id) {
     const today = new Date().toISOString().slice(0, 10);
 
+    // check if this viewer has already viewed today
     const alreadyViewed = await ProfileViewLogRepository.findOne({
       where: { viewerId, producerId, date: today },
     });
 
+    // only increment and log if not already viewed
     if (!alreadyViewed) {
-      // Increment atomic counter in producer table
-      await ProducerRepository.increment({ id: producerId }, "profileViews", 1);
+      // safe insert (due to @Unique on [viewerId, producerId, date])
+      await ProfileViewLogRepository.createQueryBuilder()
+        .insert()
+        .values({ viewerId, producerId, date: today })
+        .orIgnore()
+        .execute();
 
-      // Store unique daily record
-      await ProfileViewLogRepository.save({
-        viewerId,
-        producerId,
-        date: today,
-      });
+      // atomic increment on producer table
+      await ProducerRepository
+        .createQueryBuilder()
+        .update(Producer)
+        .set({ profileViews: () => `"profileViews" + 1` })
+        .where("id = :id", { id: producerId })
+        .execute();
 
-      // Reflect updated count immediately in response
+      // reflect updated count in response object
       producer.profileViews = (producer.profileViews || 0) + 1;
     }
   }
 
-  // Fetch related stats in parallel
   const [postCount, followerCount, eventCount] = await Promise.all([
     PostRepository.count({ where: { producer: { id: producerId } } }),
     FollowRepository.count({ where: { producer: { id: producerId } } }),
     EventRepository.count({ where: { producer: { id: producerId } } }),
   ]);
 
-  // Return full producer entity + stats (same as before)
   return {
     producer,
     stats: {
       posts: postCount,
       followers: followerCount,
       events: eventCount,
-      profileViews: producer.profileViews,
+      profileViews: producer.profileViews || 0,
     },
   };
 };

@@ -1,9 +1,11 @@
 // services/producer/dashboard.service.ts
 import { Between } from "typeorm";
-import { ProducerRepository, PostRepository, BookingRepository, PostRatingRepository, FollowRepository, InterestRepository, InterestInviteRepository, UserRepository, RestaurantRatingRepository, WellnessRepository, LeisureRepository, DishRatingRepository, MenuDishesRepository, ProfileViewLogRepository } from "../../repositories";
+import { ProducerRepository, PostRepository, BookingRepository, PostRatingRepository, FollowRepository, InterestRepository, InterestInviteRepository, UserRepository, RestaurantRatingRepository, WellnessRepository, LeisureRepository, DishRatingRepository, MenuDishesRepository, ProfileViewLogRepository, MenuCategoryRepository } from "../../repositories";
 import { NotFoundError } from "../../errors/notFound.error";
 import dayjs from "dayjs";
 import { BusinessRole } from "../../enums/Producer.enum";
+import DishRating from "../../models/DishRating";
+import { GetCategoriesInput } from "../../validators/producer/dashboard.validation";
 
 export const getOverview = async ({ userId }: { userId: number }) => {
     // Find producer
@@ -359,69 +361,131 @@ export const getEventInsights = async ({ userId }: { userId: number }) => {
     };
 };
 
-export const getDishRatings = async ({ userId, groupBy = "category", categoryId }: { userId: number; groupBy?: "category" | "dish"; categoryId?: string }) => {
-    // Find producer
+export const getDishRatings = async ({ userId, groupBy, categoryId }: { userId: number; groupBy?: "category" | "dish"; categoryId?: string }) => {
+    // get the producer for this user
     const producer = await ProducerRepository.findOne({
         where: { userId },
         select: ["id"],
     });
     if (!producer) throw new NotFoundError("Producer not found.");
 
-    // If groupBy = category → aggregate average ratings per category
-    if (groupBy === "category") {
-        const data = await DishRatingRepository.createQueryBuilder("r")
-            .leftJoin("r.dish", "d")
-            .leftJoin("d.menuCategory", "c")
-            .leftJoin("c.producer", "p")
-            .select("c.id", "categoryId")
-            .addSelect("c.name", "categoryName")
-            .addSelect("ROUND(AVG(r.rating)::numeric, 1)", "avg_rating")
-            .addSelect("COUNT(r.id)", "total_ratings")
-            .where("p.id = :producerId", { producerId: producer.id })
-            .groupBy("c.id, c.name")
-            .orderBy("avg_rating", "DESC")
-            .getRawMany();
+    // normalize categoryId from querystring to number (optional)
+    const categoryIdNum =
+        typeof categoryId === "string" && categoryId.trim() !== ""
+            ? Number(categoryId)
+            : undefined;
 
-        return {
-            view: "category",
-            totalCategories: data.length,
-            ratings: data.map((c: any) => ({
-                categoryId: Number(c.categoryid),
-                categoryName: c.categoryname || "Uncategorized",
-                averageRating: Number(c.avg_rating) || 0,
-                totalRatings: Number(c.total_ratings) || 0,
-            })),
-        };
+    // base: list dishes that belong to this producer
+    // left join into DishRatings so dishes with no ratings still appear
+    const qb = MenuDishesRepository.createQueryBuilder("MenuDishes")
+        .leftJoin("MenuDishes.menuCategory", "MenuCategory")
+        .leftJoin("MenuCategory.producer", "Producers")
+        .leftJoin(
+            DishRating, // joining the entity directly, not a short alias
+            "DishRatings",
+            "DishRatings.dishId = MenuDishes.id"
+        )
+        .where("Producers.id = :producerId", { producerId: producer.id });
+
+    // filter by category only if provided
+    if (typeof categoryIdNum === "number" && Number.isFinite(categoryIdNum)) {
+        qb.andWhere("MenuCategory.id = :categoryId", { categoryId: categoryIdNum });
     }
 
-    // If groupBy = dish → show all dishes in selected category
-    const query = DishRatingRepository.createQueryBuilder("r")
-        .leftJoin("r.dish", "d")
-        .leftJoin("d.menuCategory", "c")
-        .leftJoin("c.producer", "p")
-        .select("d.id", "dishId")
-        .addSelect("d.name", "dishName")
-        .addSelect("ROUND(AVG(r.rating)::numeric, 1)", "avg_rating")
-        .addSelect("COUNT(r.id)", "total_ratings")
-        .where("p.id = :producerId", { producerId: producer.id });
-
-    if (categoryId) query.andWhere("c.id = :categoryId", { categoryId });
-
-    const data = await query
-        .groupBy("d.id, d.name")
+    const rows = await qb
+        .select("MenuDishes.id", "dish_id")
+        .addSelect("MenuDishes.name", "dish_name")
+        .addSelect("MenuCategory.id", "category_id")
+        .addSelect("MenuCategory.name", "category_name")
+        .addSelect(
+            "COALESCE(ROUND(AVG(DishRatings.rating)::numeric, 1), 0)",
+            "avg_rating"
+        )
+        .addSelect("COUNT(DishRatings.id)", "total_ratings")
+        .groupBy("MenuDishes.id, MenuDishes.name, MenuCategory.id, MenuCategory.name")
         .orderBy("avg_rating", "DESC")
+        .addOrderBy("total_ratings", "DESC")
+        .addOrderBy("dish_name", "ASC")
         .getRawMany();
 
     return {
-        view: "dish",
-        categoryId: categoryId ? Number(categoryId) : null,
-        totalDishes: data.length,
-        ratings: data.map((d: any) => ({
-            dishId: Number(d.dishid),
-            dishName: d.dishname || "Unnamed Dish",
-            averageRating: Number(d.avg_rating) || 0,
-            totalRatings: Number(d.total_ratings) || 0,
+        view: "dishes",
+        categoryId: typeof categoryIdNum === "number" ? categoryIdNum : null,
+        totalDishes: rows.length,
+        items: rows.map((r: any) => ({
+            dishId: Number(r.dish_id),
+            dishName: r.dish_name ?? "Unnamed Dish",
+            categoryId: r.category_id !== null ? Number(r.category_id) : null,
+            categoryName: r.category_name ?? null,
+            averageRating: Number(r.avg_rating) || 0,
+            totalRatings: Number(r.total_ratings) || 0,
         })),
+    };
+};
+
+export const getCategories = async ({ userId, search, includeCounts = true, page = 1, limit = 20 }: GetCategoriesInput) => {
+    // resolve producer from current user
+    const producer = await ProducerRepository.findOne({
+        where: { userId },
+        select: ["id"],
+    });
+    if (!producer) throw new NotFoundError("Producer not found.");
+
+    const offset = (page - 1) * limit;
+
+    // main list query
+    const qb = MenuCategoryRepository.createQueryBuilder("MenuCategory")
+        .leftJoin("MenuCategory.producer", "Producers")
+        .where("Producers.id = :producerId", { producerId: producer.id });
+
+    if (search && search.trim() !== "") {
+        qb.andWhere("LOWER(MenuCategory.name) LIKE :q", {
+            q: `%${search.trim().toLowerCase()}%`,
+        });
+    }
+
+    qb.select("MenuCategory.id", "category_id")
+        .addSelect("MenuCategory.name", "category_name");
+
+    if (includeCounts) {
+        qb.leftJoin("MenuCategory.dishes", "MenuDishes")
+            .addSelect("COUNT(MenuDishes.id)", "dish_count")
+            .groupBy("MenuCategory.id, MenuCategory.name");
+    }
+
+    const rows = await qb
+        .orderBy("MenuCategory.name", "ASC")
+        .offset(offset)
+        .limit(limit)
+        .getRawMany();
+
+    // separate total count query (not grouped)
+    const totalQb = MenuCategoryRepository.createQueryBuilder("MenuCategory")
+        .leftJoin("MenuCategory.producer", "Producers")
+        .where("Producers.id = :producerId", { producerId: producer.id });
+
+    if (search && search.trim() !== "") {
+        totalQb.andWhere("LOWER(MenuCategory.name) LIKE :q", {
+            q: `%${search.trim().toLowerCase()}%`,
+        });
+    }
+
+    const total = await totalQb.getCount();
+    const totalPages = Math.ceil(total / limit);
+
+    return {
+        categories: rows.map((r: any) => ({
+            id: Number(r.category_id),
+            name: r.category_name ?? null,
+            dishCount:
+                includeCounts && r.dish_count !== undefined
+                    ? Number(r.dish_count)
+                    : undefined,
+        })),
+        page,
+        limit,
+        total,
+        totalPages,
     };
 };
 

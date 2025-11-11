@@ -68,8 +68,13 @@ export const getProfile = async (req: Request, res: Response, next: NextFunction
 
 export const getProfileById = async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const producerId = Number(req.params.producerId);
+    // Fix param name here
+    const producerId = Number(req.params.id);
     const viewerId = req.userId;
+
+    if (isNaN(producerId)) {
+      return sendApiResponse(res, 400, "Invalid producer ID provided.");
+    }
 
     const profile = await ProfileService.getProfileById(producerId, viewerId);
     return sendApiResponse(res, 200, "Producer profile fetched successfully.", profile);
