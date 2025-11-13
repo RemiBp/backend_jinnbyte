@@ -117,7 +117,6 @@ export const getAllEvents = async ({ status, category, type, lat, lng, radius }:
 };
 
 export const getEventById = async (userId: number, eventId: number) => {
-
     const user = await UserRepository.findOne({
         where: { id: userId, isDeleted: false },
         relations: ["role"],
@@ -126,31 +125,76 @@ export const getEventById = async (userId: number, eventId: number) => {
 
     let event;
 
-    // 2. If normal user → see any public active event
+    // If normal app user
     if (user.role.name === "user") {
         event = await EventRepository.findOne({
             where: { id: eventId },
-            relations: ["producer", "leisure", "eventType"],
+            relations: [
+                "producer",
+                "leisure",
+                "eventType",
+                "ratings",
+                "interests",
+
+                // Producer deep
+                "producer.user",
+                "producer.photos",
+                "producer.aiAnalysis",
+                "producer.globalRating",
+                "producer.openingHours",
+                "producer.documents",
+                "producer.offers",
+                "producer.cuisineType",
+                "producer.menuCategory",
+                "producer.menuCategory.dishes",
+            ],
         });
     }
-    // 3. If producer → only their own event
+
+    // If producer → only get their own event
     else if (["restaurant", "leisure"].includes(user.role.name)) {
-        const producer = await ProducerRepository.findOne({ where: { userId } });
+        const producer = await ProducerRepository.findOne({
+            where: { userId },
+        });
         if (!producer) throw new NotFoundError("Producer not found");
 
         event = await EventRepository.findOne({
-            where: { id: eventId, producer: { id: producer.id } },
-            relations: ["producer", "leisure", "eventType"],
+            where: {
+                id: eventId,
+                producer: { id: producer.id },
+            },
+            relations: [
+                "producer",
+                "leisure",
+                "eventType",
+                "ratings",
+                "interests",
+
+                // Producer deep
+                "producer.user",
+                "producer.photos",
+                "producer.aiAnalysis",
+                "producer.globalRating",
+                "producer.openingHours",
+                "producer.documents",
+                "producer.offers",
+                "producer.cuisineType",
+                "producer.menuCategory",
+                "producer.menuCategory.dishes",
+            ],
         });
     }
 
     if (!event) throw new NotFoundError("Event not found");
 
+    // total participants
     const { total } = await EventBookingRepository
         .createQueryBuilder("booking")
         .select("SUM(booking.numberOfPersons)", "total")
         .where("booking.eventId = :eventId", { eventId })
-        .andWhere("booking.status NOT IN (:...cancelledStatuses)", { cancelledStatuses: ['cancelled'] })
+        .andWhere("booking.status NOT IN (:...cancelledStatuses)", {
+            cancelledStatuses: ["cancelled"],
+        })
         .getRawOne();
 
     return {
@@ -233,6 +277,62 @@ export const findNearbyProducer = async (params: FindProducersNearbySchema) => {
         totalPages: Math.ceil(total / limit),
     };
 };
+
+export const getEventsByProducerId = async (producerId: number) => {
+    // Find the producer
+    const producer = await ProducerRepository.findOne({
+        where: { id: producerId },
+        relations: ["user"],
+    });
+
+    if (!producer) throw new NotFoundError("Producer not found.");
+
+    let events = [];
+
+    // If producer is RESTAURANT → use producerId
+    if (producer.type === "restaurant") {
+        events = await EventRepository.find({
+            where: { producerId },
+            relations: [
+                "producer",
+                "eventType",
+                "ratings",
+                "interests",
+                "leisure",
+            ],
+            order: { createdAt: "DESC" },
+        });
+    }
+
+    // If producer is LEISURE → find their leisure entity, then use leisureId
+    else if (producer.type === "leisure") {
+        const leisure = await LeisureRepository.findOne({
+            where: { producerId },
+        });
+
+        if (!leisure) throw new NotFoundError("Leisure profile not found.");
+
+        events = await EventRepository.find({
+            where: { leisureId: leisure.id },
+            relations: [
+                "leisure",
+                "eventType",
+                "ratings",
+                "interests",
+                "producer",
+            ],
+            order: { createdAt: "DESC" },
+        });
+    }
+
+    return {
+        producerId,
+        type: producer.type,
+        totalEvents: events.length,
+        events,
+    };
+};
+
 
 export const updateEvent = async (userId: number, eventId: number, data: Partial<CreateEventInput>) => {
     const producer = await ProducerRepository.findOne({ where: { userId } });

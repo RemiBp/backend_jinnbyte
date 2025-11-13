@@ -16,6 +16,7 @@ ProducerEventRouter.get('/getAllEvents', EventController.getAllEvents);
 ProducerEventRouter.get('/getEventById/:eventId', EventController.getEventById);
 ProducerEventRouter.post('/findNearbyProducer', EventController.findNearbyProducer);
 ProducerEventRouter.get('/getProfileById/:producerId', ProfileController.getProfileById);
+ProducerEventRouter.get('/getEventsByProducerId/:producerId', EventController.getEventsByProducerId);
 
 
 ProducerEventRouter.use(authenticateJWT);

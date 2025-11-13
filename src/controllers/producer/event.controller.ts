@@ -83,6 +83,18 @@ export const findNearbyProducer = async (req: Request, res: Response, next: Next
     }
 };
 
+export const getEventsByProducerId = async (req: Request, res: Response, next: NextFunction) => {
+    try {
+        const producerId = Number(req.params.producerId);
+
+        const data = await EventService.getEventsByProducerId(producerId);
+        return sendApiResponse(res, 200, "Events fetched successfully.", data);
+    } catch (error) {
+        next(error);
+    }
+};
+
+
 export const updateEvent = async (req: Request, res: Response, next: NextFunction) => {
     try {
         const userId = req.userId;

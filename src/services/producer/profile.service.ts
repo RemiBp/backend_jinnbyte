@@ -204,31 +204,41 @@ export const getProfileById = async (producerId: number) => {
     where: { id: producerId },
     relations: [
       "user",
-      "posts",
-      "followers",
       "photos",
       "cuisineType",
+      "posts",
+      "followers",
+      "interests",
+
+      // Deep Details
+      "documents",
+      "offers",
+      "openingHours",
+      "globalRating",
+      "aiAnalysis",
+
+      // Menu Structure
+      "menuCategory",
+      "menuCategory.dishes",
     ],
   });
 
   if (!producer) throw new NotFoundError("Producer not found.");
 
-  const [postCount, followerCount, eventCount] = await Promise.all([
+  const [postCount, followerCount] = await Promise.all([
     PostRepository.count({ where: { producer: { id: producerId } } }),
     FollowRepository.count({ where: { producer: { id: producerId } } }),
-    EventRepository.count({ where: { producer: { id: producerId } } }),
   ]);
 
-  // Just return all data — no manual mapping
   return {
     producer,
     stats: {
       posts: postCount,
       followers: followerCount,
-      events: eventCount,
     },
   };
 };
+
 
 export const deleteProfile = async (userId: number) => {
   return await PostgresDataSource.transaction(async (manager: any) => {
